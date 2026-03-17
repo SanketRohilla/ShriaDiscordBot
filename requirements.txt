@@ -1,3 +1,5 @@
 discord.py
 wavelink
 requests
+yt-dlp
+ffmpeg
