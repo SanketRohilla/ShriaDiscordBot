@@ -75,10 +75,19 @@ async def get_player(message):
     voice_channel = message.author.voice.channel
     vc: wavelink.Player = message.guild.voice_client
 
-    if not vc:
+    try:
+        if vc is None:
+            vc = await voice_channel.connect(cls=wavelink.Player)
+        elif vc.channel != voice_channel:
+            await vc.move_to(voice_channel)
+    except Exception as e:
+        print("VC error:", e)
+        try:
+            if vc:
+                await vc.disconnect()
+        except:
+            pass
         vc = await voice_channel.connect(cls=wavelink.Player)
-    elif vc.channel != voice_channel:
-        await vc.move_to(voice_channel)
 
     return vc
 
@@ -93,7 +102,12 @@ async def play_music(message, query):
 
     search = query if query.startswith("http") else f"ytsearch:{query}"
 
-    tracks = await wavelink.Playable.search(search)
+    try:
+        tracks = await wavelink.Playable.search(search)
+    except Exception as e:
+        print("Search error:", e)
+        await message.channel.send("Search failed 😭")
+        return
 
     if not tracks:
         await message.channel.send("No results 😭")
@@ -101,21 +115,27 @@ async def play_music(message, query):
 
     track = tracks[0]
 
-    await vc.play(track)
+    try:
+        await vc.play(track)
+    except Exception as e:
+        print("Play error:", e)
+        await message.channel.send("Playback failed 😭")
+        return
 
     print(f"🎵 Playing: {track.title}")
     await message.channel.send(f"🎶 Playing: **{track.title}**")
 
 
 # =========================
-# 🔌 Lavalink Setup (FIXED)
+# 🔌 Lavalink Setup (WORKING)
 # =========================
 @client.event
 async def on_ready():
     nodes = [
-        wavelink.Node(uri="http://lava.link:80", password="anything"),
-        wavelink.Node(uri="http://lavalinkv4.serenetia.com:80", password="https://seretia.link/discord"),
-        wavelink.Node(uri="http://n3.nexcloud.in:2026", password="nexcloud"),
+        wavelink.Node(
+            uri="http://lavalinkv4.serenetia.com:80",
+            password="https://seretia.link/discord"
+        )
     ]
 
     await wavelink.Pool.connect(client=client, nodes=nodes)
@@ -151,31 +171,31 @@ async def on_message(message):
 
     msg = message.content.lower()
 
-    # 🎵 MUSIC
-    if msg.startswith("/play"):
-        query = message.content[5:].strip()
+    # 🎵 MUSIC COMMANDS (NO /)
+    if msg.startswith("play"):
+        query = message.content[4:].strip()
         await play_music(message, query)
         return
 
-    if msg.startswith("/skip"):
+    if msg.startswith("skip"):
         vc = message.guild.voice_client
         if vc:
             await vc.skip()
         return
 
-    if msg.startswith("/pause"):
+    if msg.startswith("pause"):
         vc = message.guild.voice_client
         if vc:
             await vc.pause(not vc.paused)
         return
 
-    if msg.startswith("/stop"):
+    if msg.startswith("stop"):
         vc = message.guild.voice_client
         if vc:
             await vc.stop()
         return
 
-    if msg.startswith("/leave"):
+    if msg.startswith("leave"):
         vc = message.guild.voice_client
         if vc:
             await vc.disconnect()
@@ -209,6 +229,6 @@ async def on_message(message):
 
 
 # =========================
-# 🚀 Run
+# 🚀 Run Bot
 # =========================
 client.run(TOKEN)
