@@ -133,8 +133,10 @@ async def play_music(message, query):
 async def on_ready():
     nodes = [
         wavelink.Node(
-            uri="http://lavalink-4-production-bced.up.railway.app",
-            password="shria123"
+            uri="http://lavalink-4-production-bced.up.railway.app:80",
+            password="shria123",
+            secure=False
+            
         )
     ]
 
