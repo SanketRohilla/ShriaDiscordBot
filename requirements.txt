@@ -1,6 +1,5 @@
-discord.py
-wavelink
-requests
+discord.py==2.3.2
+PyNaCl
 yt-dlp
 ffmpeg
-PyNaCl
+requests
