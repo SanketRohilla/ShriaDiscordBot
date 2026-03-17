@@ -30,24 +30,22 @@ ACTIONS = ["kiss", "hug", "slap", "punch", "kick", "cry", "blush", "laugh"]
 # =========================
 # 🎬 Fetch Anime GIF
 # =========================
-def get_gif(action: str):
+def get_gif(action):
     try:
-        url = f"https://api.giphy.com/v1/gifs/search?api_key={GIPHY_API_KEY}&q=anime+{action}&limit=20"
-        response = requests.get(url).json()
-
-        gifs = [g["images"]["original"]["url"] for g in response["data"]]
-
+        url = f"https://api.giphy.com/v1/gifs/search?api_key={GIPHY_API_KEY}&q=anime+{action}&limit=25"
+        res = requests.get(url).json()
+        gifs = [g["images"]["original"]["url"] for g in res["data"]]
         return random.choice(gifs) if gifs else None
-    except Exception:
+    except:
         return None
 
 
 # =========================
-# 💬 AI Response (Groq)
+# 💬 AI Response
 # =========================
-def get_reply(user_message: str):
+def get_reply(msg):
     try:
-        response = requests.post(
+        res = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {GROQ_API_KEY}",
@@ -56,42 +54,31 @@ def get_reply(user_message: str):
             json={
                 "model": "llama-3.1-8b-instant",
                 "messages": [
-                    {
-                        "role": "system",
-                        "content": "You are Shria, cute, flirty, short replies, playful personality.",
-                    },
-                    {"role": "user", "content": user_message},
+                    {"role": "system", "content": "You are Shria, cute, flirty, short replies."},
+                    {"role": "user", "content": msg},
                 ],
-                "temperature": 1.1,
             },
         )
-
-        return response.json()["choices"][0]["message"]["content"]
-
-    except Exception:
-        return "ugh my brain lagged 😭"
+        return res.json()["choices"][0]["message"]["content"]
+    except:
+        return "ugh brain lag 😭"
 
 
 # =========================
-# 🎵 Get / Create Player
+# 🎵 Player Setup
 # =========================
 async def get_player(message):
-    if not message.author.voice or not message.author.voice.channel:
-        await message.channel.send("Join a voice channel first 😭")
+    if not message.author.voice:
+        await message.channel.send("Join VC first 😭")
         return None
 
     voice_channel = message.author.voice.channel
     vc: wavelink.Player = message.guild.voice_client
 
-    # Always reconnect cleanly (avoids broken sessions)
-    if vc:
-        try:
-            await vc.disconnect()
-        except Exception:
-            pass
-
-    vc = await voice_channel.connect(cls=wavelink.Player)
-    await asyncio.sleep(0.5)
+    if not vc:
+        vc = await voice_channel.connect(cls=wavelink.Player)
+    elif vc.channel != voice_channel:
+        await vc.move_to(voice_channel)
 
     return vc
 
@@ -99,135 +86,112 @@ async def get_player(message):
 # =========================
 # 🎵 Play Music
 # =========================
-async def play_music(message, query: str):
+async def play_music(message, query):
     vc = await get_player(message)
     if not vc:
         return
 
-    search_query = query if query.startswith("http") else f"ytsearch:{query}"
+    search = query if query.startswith("http") else f"ytsearch:{query}"
 
-    try:
-        tracks = await wavelink.Playable.search(search_query)
-    except Exception as e:
-        print("Search error:", e)
-        await message.channel.send("Couldn't search for that 😭")
-        return
+    tracks = await wavelink.Playable.search(search)
 
     if not tracks:
-        await message.channel.send("No results found 😭")
+        await message.channel.send("No results 😭")
         return
 
     track = tracks[0]
 
-    try:
-        await vc.play(track)
-    except Exception as e:
-        print("Play error:", e)
-        await message.channel.send("Music failed to play 😭")
-        return
+    await vc.play(track)
 
     print(f"🎵 Playing: {track.title}")
-    print(f"🔊 Status: {vc.playing}")
-
     await message.channel.send(f"🎶 Playing: **{track.title}**")
 
 
 # =========================
-# 🔌 Lavalink Setup
+# 🔌 Lavalink Setup (FIXED)
 # =========================
 @client.event
 async def on_ready():
-    node = wavelink.Node(
-        uri="http://lavalink.oops.wtf:80",
-        password="oops"
-    )
+    nodes = [
+        wavelink.Node(uri="http://lava.link:80", password="anything"),
+        wavelink.Node(uri="http://lavalinkv4.serenetia.com:80", password="https://seretia.link/discord"),
+        wavelink.Node(uri="http://n3.nexcloud.in:2026", password="nexcloud"),
+    ]
 
-    await wavelink.Pool.connect(client=client, nodes=[node])
+    await wavelink.Pool.connect(client=client, nodes=nodes)
 
     print(f"💖 Logged in as {client.user}")
 
 
 # =========================
-# 🎵 Debug Events
+# 🎵 Debug Logs
 # =========================
 @client.event
-async def on_wavelink_track_start(payload):
-    print(f"🎵 Track started: {payload.track.title}")
+async def on_wavelink_node_ready(payload):
+    print(f"✅ Connected: {payload.node.uri}")
 
 
 @client.event
-async def on_wavelink_track_end(payload):
-    print(f"🔚 Track ended: {payload.reason}")
+async def on_wavelink_track_start(payload):
+    print(f"🎵 Started: {payload.track.title}")
 
 
 @client.event
 async def on_wavelink_track_exception(payload):
-    print(f"❌ Track error: {payload.exception}")
+    print(f"❌ Error: {payload.exception}")
 
 
 # =========================
-# 💬 Main Message Handler
+# 💬 Main Handler
 # =========================
 @client.event
 async def on_message(message):
     if message.author == client.user:
         return
 
-    content = message.content.lower()
+    msg = message.content.lower()
 
-    # =====================
-    # 🎵 Music Commands
-    # =====================
-    if content.startswith("/play"):
+    # 🎵 MUSIC
+    if msg.startswith("/play"):
         query = message.content[5:].strip()
         await play_music(message, query)
         return
 
-    if content.startswith("/skip"):
+    if msg.startswith("/skip"):
         vc = message.guild.voice_client
-        if vc and vc.playing:
+        if vc:
             await vc.skip()
-            await message.channel.send("⏭️ Skipped")
-        else:
-            await message.channel.send("Nothing playing 😭")
         return
 
-    if content.startswith("/pause"):
+    if msg.startswith("/pause"):
         vc = message.guild.voice_client
         if vc:
             await vc.pause(not vc.paused)
-            await message.channel.send("⏸️ Paused" if vc.paused else "▶️ Resumed")
         return
 
-    if content.startswith("/stop"):
+    if msg.startswith("/stop"):
         vc = message.guild.voice_client
         if vc:
             await vc.stop()
-            await message.channel.send("⏹️ Stopped")
         return
 
-    if content.startswith("/leave"):
+    if msg.startswith("/leave"):
         vc = message.guild.voice_client
         if vc:
             await vc.disconnect()
-            await message.channel.send("👋 Left VC")
         return
 
-    # =====================
-    # 🎬 Action Commands
-    # =====================
-    if "shria" not in content and client.user not in message.mentions:
+    # 🎬 ACTIONS
+    if "shria" not in msg and client.user not in message.mentions:
         return
 
     for action in ACTIONS:
-        if action in content:
+        if action in msg:
             gif = get_gif(action)
 
+            text = f"{message.author.mention} {action}ed someone 😭"
             if message.mentions:
-                target = message.mentions[0]
-                text = f"{message.author.mention} {action}ed {target.mention} 😭"
-            else:
-                text = f"{message.author.mention} {action}ed someone 😭"
+                text = f"{message.author.mention} {action}ed {message.mentions[0].mention} 😭"
 
             embed = discord.Embed(description=text)
             if gif:
@@ -236,9 +200,7 @@ async def on_message(message):
             await message.channel.send(embed=embed)
             return
 
-    # =====================
-    # 💬 AI Chat
-    # =====================
+    # 💬 AI
     await message.channel.typing()
     await asyncio.sleep(0.5)
 
@@ -247,6 +209,6 @@ async def on_message(message):
 
 
 # =========================
-# 🚀 Start Bot
+# 🚀 Run
 # =========================
 client.run(TOKEN)
