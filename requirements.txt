@@ -3,3 +3,4 @@ wavelink
 requests
 yt-dlp
 ffmpeg
+PyNaCl
