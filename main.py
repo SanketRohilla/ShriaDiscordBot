@@ -131,16 +131,12 @@ async def play_music(message, query):
 # =========================
 @client.event
 async def on_ready():
-    nodes = [
-        wavelink.Node(
-            uri="http://lavalink-4-production-bced.up.railway.app:80",
-            password="shria123",
-            secure=False
-            
-        )
-    ]
+    node = wavelink.Node(
+        uri="http://lavalink-4-production-bced.up.railway.app",
+        password="shria123"
+    )
 
-    await wavelink.Pool.connect(client=client, nodes=nodes)
+    await wavelink.Pool.connect(client=client, nodes=[node])
 
     print(f"💖 Logged in as {client.user}")
 
