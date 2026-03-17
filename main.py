@@ -20,7 +20,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.voice_states = True
 
-client = discord.Client(intents=intents)
+bot = commands.Bot(command_prefix="/", intents=intents)
 
 # =========================
 # 🎌 ACTIONS
@@ -76,7 +76,7 @@ async def play_music(message, query):
     vc = message.guild.voice_client
 
     if not vc:
-        vc = await channel.connect()
+        vc = await channel.connect(reconnect=True, timeout=60)
 
     if not query.startswith("http"):
         query = f"ytsearch:{query}"
@@ -140,7 +140,7 @@ async def on_message(message):
 
     # 💬 AI CHAT
     await message.channel.typing()
-    await asyncio.sleep(0.5)
+    await asyncio.sleep(1)
 
     reply = get_reply(message.content)
     await message.channel.send(reply)
