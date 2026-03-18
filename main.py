@@ -3,6 +3,7 @@ import random
 import aiohttp
 import os
 import re
+import asyncio
 from discord.ext import commands, tasks
 
 TOKEN = os.getenv("TOKEN")
@@ -273,6 +274,7 @@ async def couple_loop():
 # =========================
 @bot.event
 async def on_ready():
+    await bot.tree.sync()
     print(f"Logged in as {bot.user}")
     if not couple_loop.is_running():
         couple_loop.start()
@@ -395,4 +397,22 @@ async def on_message(message):
     # AI chat
     await message.channel.send(await ai_reply(msg))
 
-bot.run(TOKEN)
+# ... keep your existing gif and AI chat lines above this ...
+    # AI chat
+    /
+
+# DELETE bot.run(TOKEN) AND PASTE THIS INSTEAD:
+async def main():
+    async with bot:
+        try:
+            # This looks into your 'cogs' folder for music.py
+            await bot.load_extension("cogs.music") 
+            print("🎵 Music Cog loaded!")
+        except Exception as e:
+            print(f"❌ Error loading music: {e}")
+            
+        await bot.start(TOKEN)
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
