@@ -79,29 +79,50 @@ async def get_gif(action):
 
         return gif
 
-    except Exception as e:
-        print("GIF ERROR:", e)
+    except:
         return None
 
 # =========================
-# 🎭 TRUTH / DARE
+# 😏 STYLE ENGINE
 # =========================
-TRUTHS = [
-    "who do you like rn 😏",
-    "biggest lie you told?",
-    "last crush?",
-    "what you hiding huh 👀"
-]
+EMOJIS = ["😭", "💀", "👀", "✨", "😏", "🙂", "😒"]
 
-DARES = [
-    "text someone 'i miss you' 😭",
-    "say something cringe rn",
-    "compliment random person",
-    "spam emojis for 5 sec 💀"
-]
+GENZ_WORDS = ["fr", "lowkey", "nahh", "bruhh", "idk", "ngl"]
+
+def humanize(text):
+    text = text.strip()
+
+    # shorten
+    words = text.split()
+    if len(words) > 6:
+        text = " ".join(words[:6])
+
+    # sometimes add genz word
+    if random.random() < 0.4:
+        text = random.choice(GENZ_WORDS) + " " + text
+
+    # emoji
+    if random.random() < 0.7:
+        text += " " + random.choice(EMOJIS)
+
+    # repeat letters
+    if random.random() < 0.25:
+        text = text.replace("h", "hh")
+
+    # random short reaction
+    if random.random() < 0.15:
+        return random.choice([
+            "bruhh 💀",
+            "nahhh 😭",
+            "fr 👀",
+            "lowkey yeah",
+            "idkk 😭"
+        ])
+
+    return text
 
 # =========================
-# 😏 JEALOUSY KEYWORDS
+# 😏 JEALOUSY
 # =========================
 GIRL_WORDS = ["girl", "her", "she", "gf", "crush", "babe"]
 
@@ -118,53 +139,39 @@ async def get_reply(user_id, user_message):
             "jealousy": 0
         })
 
-        # =====================
-        # 😏 JEALOUSY LOGIC
-        # =====================
+        # jealousy logic
         if any(word in user_message.lower() for word in GIRL_WORDS):
             user_data["jealousy"] += 1
         else:
             user_data["jealousy"] = max(0, user_data["jealousy"] - 1)
 
-        # trigger jealousy only after spam
         if user_data["jealousy"] >= 3:
             user_data["mood"] = "jealous"
 
-        # =====================
-        # 😤 MOOD LOGIC
-        # =====================
-        if len(user_message) > 100:
+        # mood logic
+        if len(user_message) > 80:
             user_data["mood"] = "annoyed"
-        elif "lol" in user_message or "haha" in user_message:
-            user_data["mood"] = "happy"
 
         mood = user_data["mood"]
 
-        # =====================
-        # 🧠 PROMPT BASED ON MOOD
-        # =====================
         mood_prompt = {
-            "neutral": "Be chill and casual.",
-            "happy": "Be playful, fun, energetic.",
-            "annoyed": "Be slightly annoyed, short replies.",
-            "jealous": "Be slightly jealous, teasing, a bit possessive but still playful."
+            "neutral": "Be casual and chill.",
+            "annoyed": "Be slightly annoyed.",
+            "jealous": "Be slightly jealous and teasing."
         }
 
         system_prompt = (
-            "You are Shria, a real human-like girl chatting casually. "
-            "Use Gen Z slang (bruhh, dang, fr, lowkey, nahhh, wild 💀). "
-            "Keep replies VERY SHORT (1 line). "
-            "Be playful, slightly flirty but safe. "
+            "You are Shria, a real Discord girl.\n"
+            "- VERY SHORT replies (1–6 words)\n"
+            "- Natural texting style\n"
+            "- Use Gen Z slang sometimes (not always)\n"
+            "- Be playful and slightly flirty\n"
+            "- Sometimes just react\n"
+            "- Never explain things\n"
             f"{mood_prompt[mood]}"
         )
 
-        past = user_data["history"][-4:]
-
         messages = [{"role": "system", "content": system_prompt}]
-
-        for msg in past:
-            messages.append(msg)
-
         messages.append({"role": "user", "content": user_message})
 
         async with aiohttp.ClientSession() as session:
@@ -177,27 +184,22 @@ async def get_reply(user_id, user_message):
                 json={
                     "model": "llama-3.1-8b-instant",
                     "messages": messages,
-                    "temperature": 1.3
+                    "temperature": 1.4
                 }
             ) as res:
                 data = await res.json()
 
         reply = data["choices"][0]["message"]["content"]
 
-        # =====================
-        # 💾 SAVE
-        # =====================
-        user_data["history"].append({"role": "user", "content": user_message})
-        user_data["history"].append({"role": "assistant", "content": reply})
+        reply = humanize(reply)
 
         memory[str(user_id)] = user_data
         save_memory(memory)
 
         return reply
 
-    except Exception as e:
-        print("AI ERROR:", e)
-        return "nahhh my brain lagged 💀"
+    except:
+        return random.choice(["bruhh 💀", "nahhh 😭", "idkk"])
 
 # =========================
 # 🚀 READY
@@ -216,9 +218,6 @@ async def on_message(message):
 
     content = message.content.lower()
 
-    # =====================
-    # 🎯 TRIGGER
-    # =====================
     is_called = (
         "shria" in content or
         bot.user in message.mentions
@@ -227,45 +226,22 @@ async def on_message(message):
     if not is_called:
         return
 
-    # =====================
-    # 🎭 TRUTH / DARE
-    # =====================
-    if "truth" in content:
-        await message.channel.send(random.choice(TRUTHS))
-        return
-
-    if "dare" in content:
-        await message.channel.send(random.choice(DARES))
-        return
-
-    # =====================
-    # 🎬 GIF
-    # =====================
+    # GIF
     for action in ACTIONS:
         if action in content:
             gif = await get_gif(action)
-
             embed = discord.Embed(description=f"{message.author.mention} {action}ed someone 😭")
-
             if gif:
                 embed.set_image(url=gif)
-
             await message.channel.send(embed=embed)
             return
 
-    # =====================
-    # 💬 AI
-    # =====================
-    try:
-        await message.channel.typing()
-        await asyncio.sleep(random.uniform(0.2, 0.6))
+    # AI
+    await message.channel.typing()
+    await asyncio.sleep(random.uniform(0.2, 0.5))
 
-        reply = await get_reply(message.author.id, message.content)
-        await message.channel.send(reply)
-
-    except Exception as e:
-        print("MAIN ERROR:", e)
-        await message.channel.send("bruhh something broke 💀")
+    reply = await get_reply(message.author.id, message.content)
+    await message.channel.send(reply)
 
 # =========================
 # ▶️ RUN
