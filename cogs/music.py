@@ -6,95 +6,146 @@ import wavelink
 class Music(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        # Start the connection in the background
         bot.loop.create_task(self.setup_nodes())
 
     async def setup_nodes(self):
         await self.bot.wait_until_ready()
-        
-        # We use a list of nodes. If one fails, Sky tries the others!
-        nodes = [
-            # Node 1: High Stability SSL
-            wavelink.Node(uri="https://lavalink.oops.wtf:443", password="www.oops.wtf"),
-            # Node 2: Backup SSL
-            wavelink.Node(uri="https://lava-v4.ajiedev.com:443", password="ajiedev"),
-            # Node 3: Third Backup
-            wavelink.Node(uri="https://lavalink.lexislohr.com:443", password="youshallnotpass")
-        ]
-        
+
         try:
-            # Connecting to the pool of nodes
-            await wavelink.Pool.connect(nodes=nodes, client=self.bot, cache_capacity=100)
+            await wavelink.Pool.connect(
+                nodes=[
+                    wavelink.Node(
+                        uri="https://lavalink-2026-production-536b.up.railway.app",
+                        password="mysuperpass"
+                    )
+                ],
+                client=self.bot,
+                cache_capacity=100
+            )
             print("✅ Sky has found a working music node!")
         except Exception as e:
-            print(f"❌ All music nodes failed: {e}")
+            print(f"❌ Lavalink connection failed: {e}")
 
     # =========================
-    # 🎵 PLAY COMMAND
+    # 🎵 PLAY
     # =========================
-    @app_commands.command(name="play", description="Ask Sky to play a song")
+    @app_commands.command(name="play", description="Play a song")
     async def play(self, interaction: discord.Interaction, search: str):
         if not interaction.user.voice:
-            return await interaction.response.send_message("Get in a VC first. I'm not singing to an empty room. 🙄", ephemeral=True)
+            return await interaction.response.send_message(
+                "Join a VC first. 🙄", ephemeral=True
+            )
 
-        await interaction.response.defer() # Gives Sky time to search
+        await interaction.response.defer()
 
-        # Connect or get current player
-        vc: wavelink.Player = interaction.guild.voice_client or await interaction.user.voice.channel.connect(cls=wavelink.Player)
-        
-        # Search for tracks
+        vc: wavelink.Player = (
+            interaction.guild.voice_client or
+            await interaction.user.voice.channel.connect(cls=wavelink.Player)
+        )
+
         tracks = await wavelink.Playable.search(search)
+
         if not tracks:
-            return await interaction.followup.send("I couldn't find that. Your taste is probably just mid. 💀")
+            return await interaction.followup.send("No results found 💀")
 
         track = tracks[0]
-        
-        # If already playing, add to queue
+
         if vc.playing:
             await vc.queue.put(track)
-            await interaction.followup.send(f"📝 Added **{track.title}** to the queue. Be patient! 💅")
+            await interaction.followup.send(f"📝 Added **{track.title}** to queue")
         else:
             await vc.play(track)
-            await interaction.followup.send(f"🎶 Fine, playing: **{track.title}**... don't make me regret this. 😏")
+            await interaction.followup.send(f"🎶 Playing **{track.title}**")
 
     # =========================
     # ⏭️ SKIP
     # =========================
-    @app_commands.command(name="skip", description="Skip this mid song")
+    @app_commands.command(name="skip", description="Skip current song")
     async def skip(self, interaction: discord.Interaction):
         vc: wavelink.Player = interaction.guild.voice_client
+
         if vc and vc.playing:
             await vc.skip()
-            await interaction.response.send_message("Skipped! Finally, something better. 💅")
+            await interaction.response.send_message("⏭️ Skipped")
         else:
-            await interaction.response.send_message("Nothing is playing, dummy. 💀", ephemeral=True)
+            await interaction.response.send_message("Nothing playing ❌", ephemeral=True)
 
     # =========================
     # 📜 QUEUE
     # =========================
-    @app_commands.command(name="queue", description="See what's coming up next")
+    @app_commands.command(name="queue", description="Show queue")
     async def queue(self, interaction: discord.Interaction):
         vc: wavelink.Player = interaction.guild.voice_client
-        if not vc or vc.queue.is_empty:
-            return await interaction.response.send_message("The queue is as empty as your brain. 💀", ephemeral=True)
 
-        upcoming = list(vc.queue)[:5] # Show next 5 tracks
-        fmt = "\n".join(f"**{i+1}.** {t.title}" for i, t in enumerate(upcoming))
-        
-        embed = discord.Embed(title="Sky's Upcoming Playlist 💅", description=fmt, color=0xff69b4)
+        if not vc or vc.queue.is_empty:
+            return await interaction.response.send_message("Queue empty 💀", ephemeral=True)
+
+        upcoming = list(vc.queue)[:5]
+
+        desc = "\n".join(f"**{i+1}.** {t.title}" for i, t in enumerate(upcoming))
+
+        embed = discord.Embed(
+            title="🎶 Upcoming Songs",
+            description=desc,
+            color=0xff69b4
+        )
+
         await interaction.response.send_message(embed=embed)
+
+    # =========================
+    # ⏸️ PAUSE
+    # =========================
+    @app_commands.command(name="pause", description="Pause song")
+    async def pause(self, interaction: discord.Interaction):
+        vc: wavelink.Player = interaction.guild.voice_client
+
+        if vc and vc.playing:
+            await vc.pause(True)
+            await interaction.response.send_message("⏸️ Paused")
+        else:
+            await interaction.response.send_message("Nothing playing ❌", ephemeral=True)
+
+    # =========================
+    # ▶️ RESUME
+    # =========================
+    @app_commands.command(name="resume", description="Resume song")
+    async def resume(self, interaction: discord.Interaction):
+        vc: wavelink.Player = interaction.guild.voice_client
+
+        if vc and vc.paused:
+            await vc.pause(False)
+            await interaction.response.send_message("▶️ Resumed")
+        else:
+            await interaction.response.send_message("Nothing paused ❌", ephemeral=True)
+
+    # =========================
+    # 🔊 VOLUME
+    # =========================
+    @app_commands.command(name="volume", description="Set volume (0-100)")
+    async def volume(self, interaction: discord.Interaction, vol: int):
+        vc: wavelink.Player = interaction.guild.voice_client
+
+        if not vc:
+            return await interaction.response.send_message("Not in VC ❌", ephemeral=True)
+
+        vol = max(0, min(vol, 100))
+        await vc.set_volume(vol)
+
+        await interaction.response.send_message(f"🔊 Volume set to {vol}%")
 
     # =========================
     # 🛑 STOP
     # =========================
-    @app_commands.command(name="stop", description="Stop music and leave")
+    @app_commands.command(name="stop", description="Stop and leave")
     async def stop(self, interaction: discord.Interaction):
         vc: wavelink.Player = interaction.guild.voice_client
+
         if vc:
             await vc.disconnect()
-            await interaction.response.send_message("I'm out. 👋")
+            await interaction.response.send_message("👋 Left VC")
         else:
-            await interaction.response.send_message("I'm not even in a VC? 🙄", ephemeral=True)
+            await interaction.response.send_message("Not in VC ❌", ephemeral=True)
+
 
 async def setup(bot):
     await bot.add_cog(Music(bot))
