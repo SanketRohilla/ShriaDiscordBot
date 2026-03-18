@@ -7,16 +7,10 @@ import json
 
 from discord.ext import commands
 
-# =========================
-# 🔐 ENV
-# =========================
 TOKEN = os.getenv("TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GIPHY_API_KEY = os.getenv("GIPHY_API_KEY")
 
-# =========================
-# ⚙️ BOT
-# =========================
 intents = discord.Intents.default()
 intents.message_content = True
 
@@ -44,13 +38,7 @@ def save_memory(data):
 # =========================
 gif_cache = {}
 
-ACTIONS = [
-    "kiss","hug","slap","punch","kick",
-    "cry","blush","laugh",
-    "pat","cuddle","bite","lick",
-    "highfive","wave","dance","angry",
-    "sleep","bored","smug","stare"
-]
+ACTIONS = ["kiss","hug","slap","punch","kick","cry","blush","laugh"]
 
 async def get_gif(action):
     try:
@@ -62,112 +50,59 @@ async def get_gif(action):
 
         gifs = [g["images"]["original"]["url"] for g in data["data"]]
 
-        if not gifs:
-            return None
-
-        if action not in gif_cache:
-            gif_cache[action] = []
-
-        available = list(set(gifs) - set(gif_cache[action]))
-
-        if not available:
-            gif_cache[action] = []
-            available = gifs
-
-        gif = random.choice(available)
-        gif_cache[action].append(gif)
-
-        return gif
-
+        return random.choice(gifs) if gifs else None
     except:
         return None
 
 # =========================
-# 😏 STYLE ENGINE
+# 😏 SMART COMEBACK SYSTEM
 # =========================
-EMOJIS = ["😭", "💀", "👀", "✨", "😏", "🙂", "😒"]
 
-def humanize(text):
-    text = text.strip()
+def smart_reply(msg):
+    msg = msg.lower()
 
-    # cut long
-    words = text.split()
-    if len(words) > 10:
-        text = " ".join(words[:10])
-
-    # emoji always (fix your issue)
-    text += " " + random.choice(EMOJIS)
-
-    # sometimes very short
-    if random.random() < 0.25:
+    # HEIGHT / TEASING
+    if "5 feet" in msg or "short" in msg:
         return random.choice([
-            "bruhh 💀",
-            "idk 😭",
-            "nahh 👀",
-            "huh?",
-            "what 😭"
+            "so what 😭",
+            "still cute tho 👀",
+            "short but elite 💀",
+            "height ain’t everything lol",
+            "why u pressed 😭"
         ])
 
-    # sometimes medium messy
-    if random.random() < 0.4:
+    # INSULT
+    if "dumb" in msg or "stupid" in msg:
         return random.choice([
-            "idk tbh 😭",
-            "lowkey weird 👀",
-            "why u asking that 😏",
-            "nahhh not really 💀",
-            "maybe… idk ✨"
+            "look who's talking 💀",
+            "you started it 😭",
+            "nah that’s you",
+            "bruhh relax",
         ])
 
-    return text
+    # COFFEE
+    if "coffee" in msg:
+        return random.choice([
+            "nah tea better 😭",
+            "green tea tbh 👀",
+            "coffee mid 💀",
+            "not really"
+        ])
 
-# =========================
-# 😏 JEALOUSY
-# =========================
-GIRL_WORDS = ["girl", "her", "she", "gf", "crush", "babe"]
+    return None
 
 # =========================
 # 💬 AI
 # =========================
-async def get_reply(user_id, user_message):
+async def get_ai_reply(user_message):
     try:
-        memory = load_memory()
-
-        user_data = memory.get(str(user_id), {
-            "history": [],
-            "mood": "neutral",
-            "jealousy": 0
-        })
-
-        # jealousy
-        if any(word in user_message.lower() for word in GIRL_WORDS):
-            user_data["jealousy"] += 1
-        else:
-            user_data["jealousy"] = max(0, user_data["jealousy"] - 1)
-
-        if user_data["jealousy"] >= 3:
-            user_data["mood"] = "jealous"
-
-        mood = user_data["mood"]
-
         system_prompt = (
             "You are Shria, a real discord girl.\n"
-            "- mix short and medium replies\n"
-            "- sometimes 1 word, sometimes 1 sentence\n"
-            "- don't always answer directly\n"
-            "- sometimes react or ask back\n"
-            "- no AI tone\n"
-            "- natural messy texting style\n"
-            
-            "IMPORTANT:\n"
-            "- you hate coffee\n"
-            "- you prefer tea or green tea\n"
+            "- Talk casually like a normal person\n"
+            "- Mix short and medium replies\n"
+            "- Sometimes tease\n"
+            "- Keep it natural, not AI\n"
         )
-
-        if mood == "jealous":
-            system_prompt += "\n- act slightly jealous and teasing"
-
-        messages = [{"role": "system", "content": system_prompt}]
-        messages.append({"role": "user", "content": user_message})
 
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -178,36 +113,20 @@ async def get_reply(user_id, user_message):
                 },
                 json={
                     "model": "llama-3.1-8b-instant",
-                    "messages": messages,
-                    "temperature": 1.4
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_message}
+                    ],
+                    "temperature": 1.2
                 }
             ) as res:
                 data = await res.json()
 
-        reply = data["choices"][0]["message"]["content"].strip().lower()
-
-        # 🔥 HARD COFFEE FIX
-        if "coffee" in reply:
-            reply = random.choice([
-                "nahh i dont like it",
-                "tea better 😭",
-                "green tea tbh 👀",
-                "not really"
-            ])
-
-        reply = humanize(reply)
-
-        memory[str(user_id)] = user_data
-        save_memory(memory)
-
-        return reply
+        reply = data["choices"][0]["message"]["content"]
+        return reply.split("\n")[0][:80]
 
     except:
-        return random.choice([
-            "idk 😭",
-            "bruhh 💀",
-            "nahh 👀"
-        ])
+        return random.choice(["idk 😭", "bruhh 💀", "nahh"])
 
 # =========================
 # 🚀 READY
@@ -244,14 +163,18 @@ async def on_message(message):
             await message.channel.send(embed=embed)
             return
 
-    # AI
+    # 🔥 SMART REPLY FIRST
+    reply = smart_reply(content)
+
+    if reply:
+        await message.channel.send(reply)
+        return
+
+    # AI fallback
     await message.channel.typing()
     await asyncio.sleep(random.uniform(0.3, 0.7))
 
-    reply = await get_reply(message.author.id, message.content)
+    reply = await get_ai_reply(message.content)
     await message.channel.send(reply)
 
-# =========================
-# ▶️ RUN
-# =========================
 bot.run(TOKEN)
