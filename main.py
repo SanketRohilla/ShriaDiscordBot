@@ -3,6 +3,7 @@ import random
 import aiohttp
 import os
 import json
+import re
 from datetime import datetime
 from discord.ext import commands
 
@@ -26,112 +27,53 @@ if not os.path.exists(MEMORY_FILE):
         json.dump({}, f)
 
 def load_memory():
-    with open(MEMORY_FILE, "r") as f:
-        return json.load(f)
+    return json.load(open(MEMORY_FILE))
 
 def save_memory(data):
-    with open(MEMORY_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+    json.dump(data, open(MEMORY_FILE, "w"), indent=2)
 
-def update_memory(user_id, msg):
+def update_memory(uid, msg):
     data = load_memory()
-
-    if str(user_id) not in data:
-        data[str(user_id)] = {"history": [], "style": "normal"}
-
-    data[str(user_id)]["history"].append(msg)
-    data[str(user_id)]["history"] = data[str(user_id)]["history"][-15:]
-
-    if len(msg.split()) <= 4:
-        data[str(user_id)]["style"] = "short"
-    else:
-        data[str(user_id)]["style"] = "normal"
-
+    if str(uid) not in data:
+        data[str(uid)] = []
+    data[str(uid)].append(msg)
+    data[str(uid)] = data[str(uid)][-10:]
     save_memory(data)
 
-def get_memory(user_id):
-    data = load_memory()
-    return data.get(str(user_id), {"history": [], "style": "normal"})
-
 # =========================
-# 🎬 GIF SYSTEM
+# 🎬 GIF
 # =========================
 ACTIONS = ["kiss","hug","slap","punch","kick","cry","blush","laugh"]
 
 async def get_gif(action):
     try:
-        url = f"https://api.giphy.com/v1/gifs/search?api_key={GIPHY_API_KEY}&q=anime+{action}&limit=40"
+        url = f"https://api.giphy.com/v1/gifs/search?api_key={GIPHY_API_KEY}&q=anime+{action}&limit=30"
         async with aiohttp.ClientSession() as session:
-            async with session.get(url) as res:
-                data = await res.json()
-
+            async with session.get(url) as r:
+                data = await r.json()
         gifs = [g["images"]["original"]["url"] for g in data["data"]]
-
-        return random.choice(gifs) if gifs else None
+        return random.choice(gifs)
     except:
         return None
-
-# =========================
-# 🔁 SAY
-# =========================
-def parse_say(msg):
-    words = msg.split()
-    if "say" in words or "type" in words:
-        try:
-            i = words.index("say") if "say" in words else words.index("type")
-            text = words[i+1]
-            count = int(words[i+2])
-            return text, min(count, 50)
-        except:
-            return None, None
-    return None, None
 
 # =========================
 # 🌡️ WEATHER
 # =========================
 async def get_weather():
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get("https://wttr.in/Delhi?format=3") as res:
-                return await res.text()
+        async with aiohttp.ClientSession() as s:
+            async with s.get("https://wttr.in/Delhi?format=3") as r:
+                return await r.text()
     except:
-        return "Delhi ~30°C rn ☀️"
+        return "Delhi ~30°C ☀️"
 
 # =========================
-# 📢 FIND MEMBER
+# 💬 AI (SMART)
 # =========================
-def find_member(guild, name):
-    name = name.lower()
-
-    for member in guild.members:
-        if name in member.name.lower() or name in member.display_name.lower():
-            return member
-
-    return None
-
-# =========================
-# 💋 EMOJI
-# =========================
-def emoji():
-    return random.choice(["😏","👀","😂","💀","✨","😉"])
-
-# =========================
-# 💬 AI
-# =========================
-async def ai_reply(user_id, msg):
+async def ai_reply(msg):
     try:
-        mem = get_memory(user_id)
-        history = "\n".join(mem["history"])
-        style = mem["style"]
-
-        style_instruction = (
-            "Reply short and casual."
-            if style == "short"
-            else "Reply naturally."
-        )
-
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
+        async with aiohttp.ClientSession() as s:
+            async with s.post(
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={
                     "Authorization": f"Bearer {GROQ_API_KEY}",
@@ -143,22 +85,17 @@ async def ai_reply(user_id, msg):
                         {
                             "role": "system",
                             "content":
-                            f"You are Sky, a flirty, playful girl. {style_instruction}"
+                            "You are Sky, flirty but helpful. If user asks how to make something, give simple steps."
                         },
-                        {
-                            "role": "user",
-                            "content": f"Past chats:\n{history}\n\nNow:\n{msg}"
-                        }
+                        {"role": "user", "content": msg}
                     ]
                 }
-            ) as res:
-                data = await res.json()
+            ) as r:
+                data = await r.json()
 
-        reply = data["choices"][0]["message"]["content"].split("\n")[0][:120]
-        return f"{reply} {emoji()}"
-
+        return data["choices"][0]["message"]["content"][:120]
     except:
-        return f"hmm idk but ur vibe nice {emoji()}"
+        return "idk 😭"
 
 # =========================
 # 🚀 MAIN
@@ -168,15 +105,65 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    content = message.content.strip()
-    lower = content.lower()
+    msg = message.content.strip()
+    lower = msg.lower()
 
-    # reply detection
+    # =====================
+    # 🔥 PREFIX COMMANDS
+    # =====================
+
+    # .spam100 tiger
+    if lower.startswith(".spam"):
+        match = re.match(r"\.spam(\d+)\s+(.+)", lower)
+
+        if match:
+            count = min(int(match.group(1)), 50)
+            text = match.group(2)
+
+            for _ in range(count):
+                await message.channel.send(text)
+            return
+
+    # .choose
+    if lower.startswith(".choose"):
+        options = msg.split()[1:]
+        await message.channel.send(random.choice(options))
+        return
+
+    # .8ball
+    if lower.startswith(".8ball"):
+        await message.channel.send(random.choice([
+            "yes 😏","no 💀","maybe 👀","definitely 😂","never 😭"
+        ]))
+        return
+
+    # .flip
+    if lower.startswith(".flip"):
+        await message.channel.send(random.choice(["heads","tails"]))
+        return
+
+    # .roll
+    if lower.startswith(".roll"):
+        await message.channel.send(f"🎲 {random.randint(1,6)}")
+        return
+
+    # .roast
+    if lower.startswith(".roast"):
+        await message.channel.send(random.choice([
+            "bro has wifi but no brain 💀",
+            "you lag in real life 😂",
+            "even google can’t fix you 😭"
+        ]))
+        return
+
+    # =====================
+    # SKY TRIGGER
+    # =====================
     is_reply = False
     if message.reference:
         try:
-            msg = await message.channel.fetch_message(message.reference.message_id)
-            if msg.author == bot.user:
+            m = await message.channel.fetch_message(message.reference.message_id)
+            if m.author == bot.user:
                 is_reply = True
         except:
             pass
@@ -190,72 +177,36 @@ async def on_message(message):
     if not trigger:
         return
 
-    # remove "sky"
     if lower.startswith("sky"):
-        content = content[3:].strip()
-        lower = content.lower()
+        msg = msg[3:].strip()
+        lower = msg.lower()
 
     # =====================
-    # 🎬 GIF COMMAND
+    # GIF
     # =====================
-    for action in ACTIONS:
-        if action in lower:
-            gif = await get_gif(action)
+    for act in ACTIONS:
+        if act in lower:
+            gif = await get_gif(act)
             if gif:
                 await message.channel.send(gif)
-            else:
-                await message.channel.send("no gif found 😭")
             return
 
     # =====================
-    # 📢 TAG SYSTEM
+    # WEATHER
     # =====================
-    if "tag" in lower:
-
-        if "everyone" in lower:
-            await message.channel.send(
-                "@everyone wake up 😏",
-                allowed_mentions=discord.AllowedMentions(everyone=True)
-            )
-            return
-
-        if "me" in lower:
-            await message.channel.send(f"{message.author.mention} there u go 😏")
-            return
-
-        parts = lower.split()
-
-        try:
-            name = parts[parts.index("tag") + 1]
-            member = find_member(message.guild, name)
-
-            if member:
-                await message.channel.send(f"{member.mention} come here 👀")
-            else:
-                await message.channel.send("who even is that 😭")
-
-        except:
-            await message.channel.send("tag who exactly? 😭")
-
-        return
-
-    # 🔁 SAY
-    text, count = parse_say(lower)
-    if text:
-        await message.channel.send("ok chill 😭")
-        await message.channel.send(" ".join([text]*count))
-        return
-
-    # 🌡️ WEATHER
-    if "temp" in lower or "weather" in lower:
+    if "weather" in lower or "temp" in lower:
         await message.channel.send(await get_weather())
         return
 
-    # 💾 MEMORY
-    update_memory(message.author.id, content)
+    # =====================
+    # MEMORY
+    # =====================
+    update_memory(message.author.id, msg)
 
-    # 💬 AI
-    reply = await ai_reply(message.author.id, content)
+    # =====================
+    # AI
+    # =====================
+    reply = await ai_reply(msg)
     await message.channel.send(reply)
 
 bot.run(TOKEN)
