@@ -8,6 +8,7 @@ from discord.ext import commands
 
 TOKEN = os.getenv("TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GIPHY_API_KEY = os.getenv("GIPHY_API_KEY")
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -53,11 +54,28 @@ def get_memory(user_id):
     return data.get(str(user_id), {"history": [], "style": "normal"})
 
 # =========================
+# 🎬 GIF SYSTEM
+# =========================
+ACTIONS = ["kiss","hug","slap","punch","kick","cry","blush","laugh"]
+
+async def get_gif(action):
+    try:
+        url = f"https://api.giphy.com/v1/gifs/search?api_key={GIPHY_API_KEY}&q=anime+{action}&limit=40"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as res:
+                data = await res.json()
+
+        gifs = [g["images"]["original"]["url"] for g in data["data"]]
+
+        return random.choice(gifs) if gifs else None
+    except:
+        return None
+
+# =========================
 # 🔁 SAY
 # =========================
 def parse_say(msg):
     words = msg.split()
-
     if "say" in words or "type" in words:
         try:
             i = words.index("say") if "say" in words else words.index("type")
@@ -131,8 +149,7 @@ async def ai_reply(user_id, msg):
                             "role": "user",
                             "content": f"Past chats:\n{history}\n\nNow:\n{msg}"
                         }
-                    ],
-                    "temperature": 1.1
+                    ]
                 }
             ) as res:
                 data = await res.json()
@@ -179,6 +196,18 @@ async def on_message(message):
         lower = content.lower()
 
     # =====================
+    # 🎬 GIF COMMAND
+    # =====================
+    for action in ACTIONS:
+        if action in lower:
+            gif = await get_gif(action)
+            if gif:
+                await message.channel.send(gif)
+            else:
+                await message.channel.send("no gif found 😭")
+            return
+
+    # =====================
     # 📢 TAG SYSTEM
     # =====================
     if "tag" in lower:
@@ -198,7 +227,6 @@ async def on_message(message):
 
         try:
             name = parts[parts.index("tag") + 1]
-
             member = find_member(message.guild, name)
 
             if member:
@@ -223,7 +251,7 @@ async def on_message(message):
         await message.channel.send(await get_weather())
         return
 
-    # 💾 SAVE MEMORY
+    # 💾 MEMORY
     update_memory(message.author.id, content)
 
     # 💬 AI
