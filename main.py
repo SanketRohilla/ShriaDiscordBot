@@ -93,7 +93,7 @@ async def on_message(message):
 
         source = discord.FFmpegPCMAudio(
             url,
-            executable="/usr/bin/ffmpeg"
+            executable="ffmpeg"
         )
 
         vc.play(source)
