@@ -3,7 +3,7 @@ import random
 import aiohttp
 import os
 import re
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 TOKEN = os.getenv("TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
@@ -16,15 +16,22 @@ intents.members = True
 bot = commands.Bot(command_prefix="", intents=intents)
 
 # =========================
+# 💖 EMOJIS
+# =========================
+LOVE_EMOJIS = ["❤️","😍","😘","💕","💓","💞","💖","💗","💘"]
+DANGER_EMOJIS = ["🔫","🔪","💣","⚔️","🗡️"]
+
+def is_only_emoji(msg):
+    return all(char in ''.join(LOVE_EMOJIS + DANGER_EMOJIS) for char in msg)
+
+# =========================
 # 💖 LOVE LINES
 # =========================
 LOVE_LINES = [
-    "you looking kinda cute today 😏",
-    "why you always this fine huh 👀",
-    "stop being this attractive it's illegal 😭",
-    "lowkey got a crush on you ngl 💕",
-    "you just made the chat better by existing ✨",
-    "i see you… and i like what i see 😏",
+    "you looking kinda cute today 😏💕",
+    "why you always this fine huh 👀💖",
+    "lowkey got a crush on you ngl 😏💘",
+    "you just made the chat better ✨💕",
 ]
 
 # =========================
@@ -32,26 +39,21 @@ LOVE_LINES = [
 # =========================
 ROASTS = [
     "bro your brain on airplane mode 💀",
-    "you lag in real life 😂",
-    "even google gave up on you 😭",
-    "npc behavior fr 💀",
+    "npc behavior fr 💀😂",
+    "you lag in real life 😭",
     "your iq buffering rn 💀",
-    "you got 2 braincells fighting 😏",
-    "bro thought he did something 💀",
 ]
 
 # =========================
-# 😒 JEALOUS LINES
+# 😒 JEALOUS
 # =========================
 JEALOUS_LINES = [
     "oh… so now it's about her? 😒",
-    "wow… you replaced me that fast? 💀",
     "go talk to her then 🙄",
-    "hmm interesting… i see how it is 😏",
-    "i’m watching you 👀"
+    "wow… replaced me that fast? 💀",
 ]
 
-GIRL_NAMES = ["shreya","riya","priya","sneha","anu","kavya","girl","she","her"]
+GIRL_WORDS = ["she","her","girl","other girl"]
 
 tagged_users = {}
 
@@ -60,9 +62,9 @@ tagged_users = {}
 # =========================
 def find_member(guild, name):
     name = name.lower()
-    for member in guild.members:
-        if name in member.name.lower() or name in member.display_name.lower():
-            return member
+    for m in guild.members:
+        if name in m.name.lower() or name in m.display_name.lower():
+            return m
     return None
 
 # =========================
@@ -80,8 +82,8 @@ async def recipe_ai(food):
                 json={
                     "model": "llama-3.1-8b-instant",
                     "messages": [
-                        {"role": "system", "content": "Give short simple recipe steps (max 5 steps)."},
-                        {"role": "user", "content": f"how to make {food}"}
+                        {"role":"system","content":"give simple short recipe steps"},
+                        {"role":"user","content": f"how to make {food}"}
                     ]
                 }
             ) as r:
@@ -89,7 +91,7 @@ async def recipe_ai(food):
 
         return data["choices"][0]["message"]["content"][:200]
     except:
-        return "idk just youtube it 😭"
+        return "idk 😭"
 
 # =========================
 # 🎬 GIF
@@ -109,7 +111,7 @@ async def get_gif(action):
         return None
 
 # =========================
-# 💬 AI CHAT
+# 💬 AI
 # =========================
 async def ai_reply(msg):
     try:
@@ -124,22 +126,55 @@ async def ai_reply(msg):
                     "model": "llama-3.1-8b-instant",
                     "messages": [
                         {
-                            "role": "system",
-                            "content": "You are Sky, flirty, playful, short replies."
+                            "role":"system",
+                            "content":"You are Sky, flirty and human-like. Always add 1 emoji in reply."
                         },
-                        {"role": "user", "content": msg}
+                        {"role":"user","content": msg}
                     ]
                 }
             ) as r:
                 data = await r.json()
 
-        return data["choices"][0]["message"]["content"][:100]
+        return data["choices"][0]["message"]["content"][:120]
     except:
-        return "idk 😏"
+        return "hmm idk 😏"
 
 # =========================
-# 🚀 MAIN
+# 💘 COUPLE SYSTEM (FIXED)
 # =========================
+@tasks.loop(hours=6)
+async def couple_loop():
+    await bot.wait_until_ready()
+
+    for guild in bot.guilds:
+        members = [m for m in guild.members if not m.bot]
+
+        if len(members) < 2:
+            continue
+
+        m1, m2 = random.sample(members, 2)
+
+        # find first usable channel
+        channel = None
+        for ch in guild.text_channels:
+            if ch.permissions_for(guild.me).send_messages:
+                channel = ch
+                break
+
+        if channel:
+            await channel.send(
+                f"💘 Sky ships {m1.mention} & {m2.mention} now 😏"
+            )
+
+# =========================
+# 🚀 EVENTS
+# =========================
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user}")
+    if not couple_loop.is_running():
+        couple_loop.start()
+
 @bot.event
 async def on_message(message):
     if message.author.bot:
@@ -149,7 +184,20 @@ async def on_message(message):
     lower = msg.lower()
 
     # =====================
-    # 🔥 AUTO ROAST REPLY
+    # 💖 EMOJI SYSTEM (FIXED)
+    # =====================
+    if msg:
+        if any(e in msg for e in DANGER_EMOJIS):
+            await message.channel.send("why u gonna kill me like that 😭")
+            return
+
+        # only emoji message
+        if re.fullmatch(r"[^\w\s]+", msg):
+            await message.channel.send(random.choice(LOVE_EMOJIS))
+            return
+
+    # =====================
+    # 🔥 REVENGE ROAST
     # =====================
     if message.author.id in tagged_users:
         await message.channel.send(
@@ -183,16 +231,12 @@ async def on_message(message):
         msg = msg[3:].strip()
         lower = msg.lower()
 
-    # =====================
-    # 😒 JEALOUSY
-    # =====================
-    if any(word in lower for word in GIRL_NAMES):
+    # jealousy
+    if any(w in lower for w in GIRL_WORDS):
         await message.channel.send(random.choice(JEALOUS_LINES))
         return
 
-    # =====================
-    # 💖 TAG SYSTEM
-    # =====================
+    # tag
     if "tag" in lower:
         parts = lower.split()
 
@@ -200,7 +244,7 @@ async def on_message(message):
             user = message.author
         else:
             try:
-                name = parts[parts.index("tag") + 1]
+                name = parts[parts.index("tag")+1]
                 user = find_member(message.guild, name)
             except:
                 user = None
@@ -215,9 +259,7 @@ async def on_message(message):
 
         return
 
-    # =====================
-    # 🔥 ROAST
-    # =====================
+    # roast
     if "roast" in lower:
         if "everyone" in lower:
             await message.channel.send(
@@ -227,24 +269,20 @@ async def on_message(message):
             return
 
         if message.mentions:
-            user = message.mentions[0]
-            await message.channel.send(f"{user.mention} {random.choice(ROASTS)}")
+            u = message.mentions[0]
+            await message.channel.send(f"{u.mention} {random.choice(ROASTS)}")
             return
 
         await message.channel.send(random.choice(ROASTS))
         return
 
-    # =====================
-    # 🍳 RECIPE
-    # =====================
-    if "how to make" in lower or "recipe" in lower:
-        food = lower.replace("how to make", "").replace("recipe", "").strip()
+    # recipe
+    if "how to make" in lower:
+        food = lower.replace("how to make","").strip()
         await message.channel.send(await recipe_ai(food))
         return
 
-    # =====================
-    # 🎬 GIF
-    # =====================
+    # gif
     for act in ACTIONS:
         if act in lower:
             gif = await get_gif(act)
@@ -252,10 +290,7 @@ async def on_message(message):
                 await message.channel.send(gif)
             return
 
-    # =====================
-    # 💬 CHAT
-    # =====================
-    reply = await ai_reply(msg)
-    await message.channel.send(reply)
+    # AI chat
+    await message.channel.send(await ai_reply(msg))
 
 bot.run(TOKEN)
