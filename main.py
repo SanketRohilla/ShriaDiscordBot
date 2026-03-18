@@ -2,68 +2,62 @@ import discord
 import random
 import aiohttp
 import os
+import json
 from datetime import datetime
 from discord.ext import commands
 
 TOKEN = os.getenv("TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GIPHY_API_KEY = os.getenv("GIPHY_API_KEY")
 
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True
+
 bot = commands.Bot(command_prefix="", intents=intents)
 
 # =========================
-# 🎬 GIF
+# 💾 MEMORY
 # =========================
-ACTIONS = ["kiss","hug","slap","punch","kick","cry","blush","laugh"]
+MEMORY_FILE = "memory.json"
 
-async def get_gif(action):
-    try:
-        url = f"https://api.giphy.com/v1/gifs/search?api_key={GIPHY_API_KEY}&q=anime+{action}&limit=30"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as res:
-                data = await res.json()
-        gifs = [g["images"]["original"]["url"] for g in data["data"]]
-        return random.choice(gifs) if gifs else None
-    except:
-        return None
+if not os.path.exists(MEMORY_FILE):
+    with open(MEMORY_FILE, "w") as f:
+        json.dump({}, f)
 
-# =========================
-# 📅 DATE
-# =========================
-def get_today():
-    return datetime.now().strftime("%A, %d %B %Y")
+def load_memory():
+    with open(MEMORY_FILE, "r") as f:
+        return json.load(f)
 
-# =========================
-# 🌡️ WEATHER
-# =========================
-async def get_weather():
-    try:
-        url = "https://goweather.herokuapp.com/weather/Delhi"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=5) as res:
-                data = await res.json()
+def save_memory(data):
+    with open(MEMORY_FILE, "w") as f:
+        json.dump(data, f, indent=2)
 
-        temp = data.get("temperature")
-        desc = data.get("description")
+def update_memory(user_id, msg):
+    data = load_memory()
 
-        if temp:
-            return f"Delhi rn {temp}, {desc} 🌤️"
-    except:
-        pass
+    if str(user_id) not in data:
+        data[str(user_id)] = {"history": [], "style": "normal"}
 
-    return random.choice([
-        "kinda warm rn 😏",
-        "hot outside fr ☀️",
-        "weather chill rn 👀"
-    ])
+    data[str(user_id)]["history"].append(msg)
+    data[str(user_id)]["history"] = data[str(user_id)]["history"][-15:]
+
+    if len(msg.split()) <= 4:
+        data[str(user_id)]["style"] = "short"
+    else:
+        data[str(user_id)]["style"] = "normal"
+
+    save_memory(data)
+
+def get_memory(user_id):
+    data = load_memory()
+    return data.get(str(user_id), {"history": [], "style": "normal"})
 
 # =========================
 # 🔁 SAY
 # =========================
 def parse_say(msg):
     words = msg.split()
+
     if "say" in words or "type" in words:
         try:
             i = words.index("say") if "say" in words else words.index("type")
@@ -75,20 +69,49 @@ def parse_say(msg):
     return None, None
 
 # =========================
-# 💋 EMOJI SYSTEM
+# 🌡️ WEATHER
 # =========================
-def pick_emoji(msg):
-    if "love" in msg:
-        return random.choice(["❤️","😘","😏"])
-    if "funny" in msg:
-        return random.choice(["😂","🤣","💀"])
-    return random.choice(["😏","👀","😂","💀"])
+async def get_weather():
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://wttr.in/Delhi?format=3") as res:
+                return await res.text()
+    except:
+        return "Delhi ~30°C rn ☀️"
+
+# =========================
+# 📢 FIND MEMBER
+# =========================
+def find_member(guild, name):
+    name = name.lower()
+
+    for member in guild.members:
+        if name in member.name.lower() or name in member.display_name.lower():
+            return member
+
+    return None
+
+# =========================
+# 💋 EMOJI
+# =========================
+def emoji():
+    return random.choice(["😏","👀","😂","💀","✨","😉"])
 
 # =========================
 # 💬 AI
 # =========================
-async def ai_reply(msg):
+async def ai_reply(user_id, msg):
     try:
+        mem = get_memory(user_id)
+        history = "\n".join(mem["history"])
+        style = mem["style"]
+
+        style_instruction = (
+            "Reply short and casual."
+            if style == "short"
+            else "Reply naturally."
+        )
+
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 "https://api.groq.com/openai/v1/chat/completions",
@@ -99,19 +122,26 @@ async def ai_reply(msg):
                 json={
                     "model": "llama-3.1-8b-instant",
                     "messages": [
-                        {"role": "system", "content":
-                         "You are Sky, a flirty, fun, real discord girl. Keep replies natural."},
-                        {"role": "user", "content": msg}
-                    ]
+                        {
+                            "role": "system",
+                            "content":
+                            f"You are Sky, a flirty, playful girl. {style_instruction}"
+                        },
+                        {
+                            "role": "user",
+                            "content": f"Past chats:\n{history}\n\nNow:\n{msg}"
+                        }
+                    ],
+                    "temperature": 1.1
                 }
             ) as res:
                 data = await res.json()
 
-        reply = data["choices"][0]["message"]["content"].split("\n")[0][:100]
-        return f"{reply} {pick_emoji(reply)}"
+        reply = data["choices"][0]["message"]["content"].split("\n")[0][:120]
+        return f"{reply} {emoji()}"
 
     except:
-        return f"idk but you're kinda cute {pick_emoji(msg)}"
+        return f"hmm idk but ur vibe nice {emoji()}"
 
 # =========================
 # 🚀 MAIN
@@ -121,7 +151,8 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    content = message.content.lower()
+    content = message.content.strip()
+    lower = content.lower()
 
     # reply detection
     is_reply = False
@@ -134,7 +165,7 @@ async def on_message(message):
             pass
 
     trigger = (
-        "sky" in content or
+        lower.startswith("sky") or
         bot.user in message.mentions or
         is_reply
     )
@@ -142,41 +173,61 @@ async def on_message(message):
     if not trigger:
         return
 
-    # 📢 TAG EVERYONE
-    if "tag everyone" in content:
-        await message.channel.send(
-            "@everyone wake up 👀",
-            allowed_mentions=discord.AllowedMentions(everyone=True)
-        )
+    # remove "sky"
+    if lower.startswith("sky"):
+        content = content[3:].strip()
+        lower = content.lower()
+
+    # =====================
+    # 📢 TAG SYSTEM
+    # =====================
+    if "tag" in lower:
+
+        if "everyone" in lower:
+            await message.channel.send(
+                "@everyone wake up 😏",
+                allowed_mentions=discord.AllowedMentions(everyone=True)
+            )
+            return
+
+        if "me" in lower:
+            await message.channel.send(f"{message.author.mention} there u go 😏")
+            return
+
+        parts = lower.split()
+
+        try:
+            name = parts[parts.index("tag") + 1]
+
+            member = find_member(message.guild, name)
+
+            if member:
+                await message.channel.send(f"{member.mention} come here 👀")
+            else:
+                await message.channel.send("who even is that 😭")
+
+        except:
+            await message.channel.send("tag who exactly? 😭")
+
         return
 
     # 🔁 SAY
-    text, count = parse_say(content)
+    text, count = parse_say(lower)
     if text:
-        await message.channel.send("ok fine 😭")
+        await message.channel.send("ok chill 😭")
         await message.channel.send(" ".join([text]*count))
         return
 
     # 🌡️ WEATHER
-    if "temp" in content or "weather" in content:
+    if "temp" in lower or "weather" in lower:
         await message.channel.send(await get_weather())
         return
 
-    # 📅 DATE
-    if "date" in content:
-        await message.channel.send(get_today())
-        return
-
-    # 🎬 GIF
-    for a in ACTIONS:
-        if a in content:
-            gif = await get_gif(a)
-            if gif:
-                await message.channel.send(gif)
-            return
+    # 💾 SAVE MEMORY
+    update_memory(message.author.id, content)
 
     # 💬 AI
-    reply = await ai_reply(message.content)
+    reply = await ai_reply(message.author.id, content)
     await message.channel.send(reply)
 
 bot.run(TOKEN)
