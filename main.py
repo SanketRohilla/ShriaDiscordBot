@@ -46,29 +46,24 @@ async def get_gif(action):
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as res:
                 data = await res.json()
-
         gifs = [g["images"]["original"]["url"] for g in data["data"]]
         return random.choice(gifs) if gifs else None
     except:
         return None
 
 # =========================
-# 📅 DATE + DAY
+# 📅 DATE
 # =========================
 def get_today():
     now = datetime.now()
-    date = now.strftime("%d %B %Y")
-    day = now.strftime("%A")
-    return f"{day}, {date}"
+    return f"{now.strftime('%A')}, {now.strftime('%d %B %Y')}"
 
 # =========================
-# 🌡️ WEATHER (INDIA - FREE)
+# 🌡️ WEATHER INDIA
 # =========================
 async def get_india_weather():
     try:
-        # Delhi used as default India temp
         url = "https://wttr.in/Delhi?format=j1"
-
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as res:
                 data = await res.json()
@@ -77,7 +72,6 @@ async def get_india_weather():
         desc = data["current_condition"][0]["weatherDesc"][0]["value"]
 
         return temp, desc
-
     except:
         return None, None
 
@@ -86,9 +80,8 @@ async def get_india_weather():
 # =========================
 async def get_gold_price():
     try:
-        url = "https://api.gold-api.com/price/XAU"
         async with aiohttp.ClientSession() as session:
-            async with session.get(url) as res:
+            async with session.get("https://api.gold-api.com/price/XAU") as res:
                 data = await res.json()
         return data["price"]
     except:
@@ -96,11 +89,24 @@ async def get_gold_price():
 
 async def get_silver_price():
     try:
-        url = "https://api.gold-api.com/price/XAG"
         async with aiohttp.ClientSession() as session:
-            async with session.get(url) as res:
+            async with session.get("https://api.gold-api.com/price/XAG") as res:
                 data = await res.json()
         return data["price"]
+    except:
+        return None
+
+# =========================
+# 💱 USD → INR
+# =========================
+async def usd_to_inr(usd):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://open.er-api.com/v6/latest/USD") as res:
+                data = await res.json()
+
+        rate = data["rates"]["INR"]
+        return round(usd * rate, 2)
     except:
         return None
 
@@ -110,24 +116,19 @@ async def get_silver_price():
 def smart_reply(msg):
     msg = msg.lower()
 
-    if "short" in msg or "5 feet" in msg:
+    if "short" in msg:
         return random.choice([
             "so what 😭 still better than you",
-            "short but elite 💀",
-            "why u so focused on that 👀"
+            "short but elite 💀"
         ])
 
     if "coffee" in msg:
-        return random.choice([
-            "nahh tea better 😭",
-            "green tea > coffee 👀",
-            "coffee mid fr 💀"
-        ])
+        return "nahh tea better 😭"
 
     return None
 
 # =========================
-# 💬 AI CHAT
+# 💬 AI
 # =========================
 async def get_ai_reply(user_id, user_message):
     try:
@@ -137,13 +138,12 @@ async def get_ai_reply(user_id, user_message):
 
         system_prompt = (
             "You are Shria, a real discord girl.\n"
-            "- short reply (1 sentence)\n"
-            "- casual + slightly funny\n"
+            "- short reply\n"
+            "- casual + funny\n"
             "- Gen Z words sometimes\n"
-            "- natural emojis\n"
+            "- emoji included\n"
             "- no roleplay words\n"
-            "- keep convo flowing\n"
-            "- prefer tea not coffee\n"
+            "- keep convo going\n"
         )
 
         messages = [{"role": "system", "content": system_prompt}]
@@ -176,7 +176,7 @@ async def get_ai_reply(user_id, user_message):
             reply = " ".join(reply.split()[:12])
 
         if not any(e in reply for e in ["😭","💀","👀","✨","😏"]):
-            reply += " " + random.choice(["😭","💀","👀","✨","😏"])
+            reply += " 😭"
 
         user_data["history"].append({"role": "user", "content": user_message})
         user_data["history"].append({"role": "assistant", "content": reply})
@@ -187,17 +187,10 @@ async def get_ai_reply(user_id, user_message):
         return reply
 
     except:
-        return random.choice(["idk 😭","bruhh 💀","nahh 👀"])
+        return "idk 😭"
 
 # =========================
-# 🚀 READY
-# =========================
-@bot.event
-async def on_ready():
-    print(f"Logged in as {bot.user}")
-
-# =========================
-# 💬 MAIN
+# 🚀 MAIN
 # =========================
 @bot.event
 async def on_message(message):
@@ -206,44 +199,43 @@ async def on_message(message):
 
     content = message.content.lower()
 
-    is_called = (
-        "shria" in content or
-        bot.user in message.mentions
-    )
-
-    if not is_called:
+    if "shria" not in content and bot.user not in message.mentions:
         return
 
-    # 📅 DATE
-    if "date" in content or "day" in content or "today" in content:
+    # DATE
+    if "date" in content or "today" in content:
         await message.channel.send(f"today is {get_today()} 👀")
         return
 
-    # 🌡️ WEATHER INDIA
+    # WEATHER
     if "weather" in content or "temperature" in content:
         temp, desc = await get_india_weather()
-        if temp:
-            await message.channel.send(f"india rn {temp}°C, {desc} 👀")
-        else:
-            await message.channel.send("idk rn 😭")
+        await message.channel.send(f"india rn {temp}°C, {desc} 👀")
         return
 
-    # 💰 GOLD
+    # GOLD
     if "gold" in content:
-        price = await get_gold_price()
-        if price:
-            await message.channel.send(f"gold rn ${price} 👀")
-        else:
-            await message.channel.send("idk rn 😭")
+        usd = await get_gold_price()
+        inr = await usd_to_inr(usd)
+        await message.channel.send(f"gold rn ${usd} (~₹{inr}) 👀")
         return
 
-    # 💰 SILVER
+    # SILVER
     if "silver" in content:
-        price = await get_silver_price()
-        if price:
-            await message.channel.send(f"silver rn ${price} 👀")
-        else:
-            await message.channel.send("idk rn 😭")
+        usd = await get_silver_price()
+        inr = await usd_to_inr(usd)
+        await message.channel.send(f"silver rn ${usd} (~₹{inr}) 👀")
+        return
+
+    # STOCK
+    if "stock" in content:
+        await message.channel.send(
+            random.choice([
+                "tata, reliance, hdfc are safe 👀",
+                "infosys lowkey good long term 💀",
+                "depends on risk tbh 😭"
+            ])
+        )
         return
 
     # GIF
@@ -261,13 +253,7 @@ async def on_message(message):
         return
 
     # AI
-    await message.channel.typing()
-    await asyncio.sleep(random.uniform(0.4, 0.8))
-
     reply = await get_ai_reply(message.author.id, message.content)
     await message.channel.send(reply)
 
-# =========================
-# ▶️ RUN
-# =========================
 bot.run(TOKEN)
