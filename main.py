@@ -38,16 +38,30 @@ def get_today():
     return datetime.now().strftime("%A, %d %B %Y")
 
 # =========================
-# 🌡️ WEATHER (FIXED)
+# 🌡️ WEATHER (FIXED HARD)
 # =========================
 async def get_weather():
     try:
-        url = "https://wttr.in/Delhi?format=3"
+        url = "https://goweather.herokuapp.com/weather/Delhi"
         async with aiohttp.ClientSession() as session:
-            async with session.get(url) as res:
-                return await res.text()
+            async with session.get(url, timeout=5) as res:
+                data = await res.json()
+
+        temp = data.get("temperature")
+        desc = data.get("description")
+
+        if temp:
+            return f"Delhi rn {temp}, {desc} 👀"
+
     except:
-        return "Delhi ~30°C 👀"
+        pass
+
+    # fallback ALWAYS
+    return random.choice([
+        "Delhi rn around 30°C kinda warm 😭",
+        "prob like 28-32°C rn 👀",
+        "lowkey hot outside ngl ☀️"
+    ])
 
 # =========================
 # 💰 GOLD / SILVER
@@ -89,7 +103,7 @@ async def get_stock(symbol):
         if not result:
             return None
 
-        return f"{result[0]['shortName']} rn ₹{result[0]['regularMarketPrice']} 👀"
+        return f"{result[0]['shortName']} rn ₹{result[0]['regularMarketPrice']} 📈"
     except:
         return None
 
@@ -121,10 +135,31 @@ def parse_say(msg):
     return None, None
 
 # =========================
+# 🎭 SMART EMOJI SYSTEM
+# =========================
+def pick_emoji(msg):
+    msg = msg.lower()
+
+    if "lol" in msg or "funny" in msg:
+        return random.choice(["😂","🤣","💀"])
+
+    if "love" in msg or "cute" in msg:
+        return random.choice(["❤️","😏","😘"])
+
+    if "angry" in msg or "mad" in msg:
+        return random.choice(["😤","💢","😒"])
+
+    if "money" in msg or "stock" in msg:
+        return random.choice(["💸","📈","🤑"])
+
+    if "weather" in msg or "temp" in msg:
+        return random.choice(["☀️","🌡️","🌤️"])
+
+    return random.choice(["😭","👀","😏","💀","😂"])
+
+# =========================
 # 💬 AI
 # =========================
-EMOJIS = ["😭","💀","👀","😂","😏"]
-
 async def ai_reply(msg):
     try:
         async with aiohttp.ClientSession() as session:
@@ -138,7 +173,7 @@ async def ai_reply(msg):
                     "model": "llama-3.1-8b-instant",
                     "messages": [
                         {"role": "system", "content":
-                         "You are Shria, funny, flirty, casual, smart. Answer properly if asked serious question."},
+                         "You are Shria, a funny, flirty, real discord girl. Be helpful when needed."},
                         {"role": "user", "content": msg}
                     ]
                 }
@@ -147,13 +182,11 @@ async def ai_reply(msg):
 
         reply = data["choices"][0]["message"]["content"].split("\n")[0][:100]
 
-        if not any(e in reply for e in EMOJIS):
-            reply += " " + random.choice(EMOJIS)
-
-        return reply
+        emoji = pick_emoji(reply)
+        return f"{reply} {emoji}"
 
     except:
-        return "idk 😭"
+        return f"idk {pick_emoji(msg)}"
 
 # =========================
 # 🚀 MAIN
@@ -194,7 +227,7 @@ async def on_message(message):
     # SAY
     text, count = parse_say(content)
     if text:
-        await message.channel.send("ok chill 😭 here")
+        await message.channel.send(f"okok chill {pick_emoji(content)}")
         await message.channel.send(" ".join([text]*count))
         return
 
@@ -211,13 +244,13 @@ async def on_message(message):
     # GOLD
     if "gold" in content:
         p = await get_price("XAU")
-        await message.channel.send(f"gold rn {p}" if p else "error 😭")
+        await message.channel.send(f"gold rn {p}" if p else "error 💀")
         return
 
     # SILVER
     if "silver" in content:
         p = await get_price("XAG")
-        await message.channel.send(f"silver rn {p}" if p else "error 😭")
+        await message.channel.send(f"silver rn {p}" if p else "error 💀")
         return
 
     # STOCK
