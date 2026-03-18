@@ -399,7 +399,7 @@ async def on_message(message):
 
 # ... keep your existing gif and AI chat lines above this ...
     # AI chat
-    /
+    
 
 # DELETE bot.run(TOKEN) AND PASTE THIS INSTEAD:
 async def main():
