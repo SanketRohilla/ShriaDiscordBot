@@ -13,8 +13,6 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="", intents=intents)
 
-active_users = {}
-
 # =========================
 # 🎬 GIF
 # =========================
@@ -56,66 +54,10 @@ async def get_weather():
         pass
 
     return random.choice([
-        "kinda warm outside... like me 😏",
-        "hot weather fr ☀️ stay hydrated",
-        "lowkey perfect weather to vibe 👀"
+        "kinda warm rn 😏",
+        "hot outside fr ☀️",
+        "weather chill rn 👀"
     ])
-
-# =========================
-# 💰 GOLD / SILVER
-# =========================
-async def get_price(metal):
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"https://api.gold-api.com/price/{metal}") as res:
-                data = await res.json()
-
-        usd = data["price"]
-
-        async with aiohttp.ClientSession() as session:
-            async with session.get("https://open.er-api.com/v6/latest/USD") as res:
-                rate = (await res.json())["rates"]["INR"]
-
-        return f"${usd} (~₹{round(usd*rate,2)})"
-    except:
-        return None
-
-# =========================
-# 📈 STOCK
-# =========================
-STOCKS = {
-    "infosys": "INFY.NS",
-    "tcs": "TCS.NS",
-    "reliance": "RELIANCE.NS",
-    "hdfc": "HDFCBANK.NS"
-}
-
-async def get_stock(symbol):
-    try:
-        url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbol}"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as res:
-                data = await res.json()
-
-        result = data["quoteResponse"]["result"]
-        if not result:
-            return None
-
-        return f"{result[0]['shortName']} rn ₹{result[0]['regularMarketPrice']} 📈"
-    except:
-        return None
-
-# =========================
-# 🍳 RECIPE
-# =========================
-def get_recipe(msg):
-    if "cake" in msg:
-        return "cake:\n1 mix flour sugar eggs\n2 add milk butter\n3 bake 180C 🍰"
-    if "tea" in msg:
-        return "tea:\n1 boil water\n2 add tea milk\n3 sugar ☕"
-    if "bread" in msg:
-        return "bread:\n1 flour yeast\n2 knead\n3 bake 🍞"
-    return None
 
 # =========================
 # 🔁 SAY
@@ -138,16 +80,12 @@ def parse_say(msg):
 def pick_emoji(msg):
     if "love" in msg:
         return random.choice(["❤️","😘","😏"])
-    if "hi" in msg or "hey" in msg:
-        return random.choice(["👀","😏","✨"])
     if "funny" in msg:
         return random.choice(["😂","🤣","💀"])
-    if "money" in msg or "stock" in msg:
-        return random.choice(["💸","📈","🤑"])
-    return random.choice(["😏","👀","💀","😂","✨"])
+    return random.choice(["😏","👀","😂","💀"])
 
 # =========================
-# 💬 AI (SKY)
+# 💬 AI
 # =========================
 async def ai_reply(msg):
     try:
@@ -162,7 +100,7 @@ async def ai_reply(msg):
                     "model": "llama-3.1-8b-instant",
                     "messages": [
                         {"role": "system", "content":
-                         "You are Sky, a playful, flirty, smart discord girl. Be fun but helpful."},
+                         "You are Sky, a flirty, fun, real discord girl. Keep replies natural."},
                         {"role": "user", "content": msg}
                     ]
                 }
@@ -173,7 +111,7 @@ async def ai_reply(msg):
         return f"{reply} {pick_emoji(reply)}"
 
     except:
-        return f"idk but you're kinda cute tho {pick_emoji(msg)}"
+        return f"idk but you're kinda cute {pick_emoji(msg)}"
 
 # =========================
 # 🚀 MAIN
@@ -184,7 +122,6 @@ async def on_message(message):
         return
 
     content = message.content.lower()
-    user_id = message.author.id
 
     # reply detection
     is_reply = False
@@ -199,19 +136,16 @@ async def on_message(message):
     trigger = (
         "sky" in content or
         bot.user in message.mentions or
-        is_reply or
-        active_users.get(user_id)
+        is_reply
     )
 
     if not trigger:
         return
 
-    active_users[user_id] = True
-
     # 📢 TAG EVERYONE
     if "tag everyone" in content:
         await message.channel.send(
-            "@everyone hey wake up cuties 😏",
+            "@everyone wake up 👀",
             allowed_mentions=discord.AllowedMentions(everyone=True)
         )
         return
@@ -219,7 +153,7 @@ async def on_message(message):
     # 🔁 SAY
     text, count = parse_say(content)
     if text:
-        await message.channel.send(f"ugh fine 😭 but only for u")
+        await message.channel.send("ok fine 😭")
         await message.channel.send(" ".join([text]*count))
         return
 
@@ -232,20 +166,6 @@ async def on_message(message):
     if "date" in content:
         await message.channel.send(get_today())
         return
-
-    # 📈 STOCK
-    for key in STOCKS:
-        if key in content:
-            res = await get_stock(STOCKS[key])
-            await message.channel.send(res if res else "market acting weird 💀")
-            return
-
-    # 🍳 RECIPE
-    if "how to" in content or "make" in content:
-        r = get_recipe(content)
-        if r:
-            await message.channel.send(r)
-            return
 
     # 🎬 GIF
     for a in ACTIONS:
