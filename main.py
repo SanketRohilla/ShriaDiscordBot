@@ -284,6 +284,8 @@ async def on_message(message):
     if message.author.bot:
         return
 
+    await bot.process_commands(message)
+
     msg = message.content.strip()
     lower = msg.lower()
 
