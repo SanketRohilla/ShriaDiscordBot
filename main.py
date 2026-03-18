@@ -7,23 +7,17 @@ import json
 
 from discord.ext import commands
 
-# =========================
-# 🔐 ENV
-# =========================
 TOKEN = os.getenv("TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GIPHY_API_KEY = os.getenv("GIPHY_API_KEY")
 
-# =========================
-# ⚙️ BOT
-# =========================
 intents = discord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="", intents=intents)
 
 # =========================
-# 💾 MEMORY
+# 💾 MEMORY SYSTEM
 # =========================
 MEMORY_FILE = "memory.json"
 
@@ -40,117 +34,105 @@ def save_memory(data):
         json.dump(data, f, indent=2)
 
 # =========================
-# 🎬 GIF SYSTEM
+# 🎬 GIF
 # =========================
-gif_cache = {}
-
-ACTIONS = [
-    "kiss","hug","slap","punch","kick",
-    "cry","blush","laugh","pat","cuddle"
-]
-
 async def get_gif(action):
     try:
-        url = f"https://api.giphy.com/v1/gifs/search?api_key={GIPHY_API_KEY}&q=anime+{action}&limit=50"
+        url = f"https://api.giphy.com/v1/gifs/search?api_key={GIPHY_API_KEY}&q=anime+{action}&limit=25"
 
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as res:
                 data = await res.json()
 
         gifs = [g["images"]["original"]["url"] for g in data["data"]]
-
-        if not gifs:
-            return None
-
-        if action not in gif_cache:
-            gif_cache[action] = []
-
-        available = list(set(gifs) - set(gif_cache[action]))
-
-        if not available:
-            gif_cache[action] = []
-            available = gifs
-
-        gif = random.choice(available)
-        gif_cache[action].append(gif)
-
-        return gif
-
+        return random.choice(gifs) if gifs else None
     except:
         return None
 
 # =========================
-# 😏 SMART HUMAN RESPONSES
+# 😏 SMART REPLIES
 # =========================
 def smart_reply(msg):
     msg = msg.lower()
 
-    if "5 feet" in msg or "short" in msg:
+    if "good" in msg or "nice" in msg:
         return random.choice([
-            "wow okay 😭 but I still carry myself better than you",
-            "so what? I like it that way",
-            "short but still winning 👀"
+            "oh nice, what happened?",
+            "good how? tell me 👀",
+            "hmm sounds interesting"
         ])
 
-    if "dumb" in msg:
+    if "arrest" in msg or "jail" in msg:
         return random.choice([
-            "wow rude 😭",
-            "nah you just mad",
-            "look who’s talking"
+            "wait what did I do 😭",
+            "nahhh I’m innocent fr",
+            "you setting me up 💀"
         ])
 
-    if "coffee" in msg:
+    if "baby" in msg:
         return random.choice([
-            "nahh not really, I prefer tea",
-            "green tea over coffee any day",
-            "coffee’s not really my thing"
+            "huh? who u calling that 😭",
+            "careful with that word 😏",
+            "you getting bold now huh"
         ])
 
     return None
 
 # =========================
-# 💬 AI (NORMAL + FLIRTY)
+# 💬 AI WITH MEMORY
 # =========================
-async def get_ai_reply(user_message):
-    try:
-        system_prompt = (
-            "You are Shria, a friendly, slightly flirty girl chatting naturally.\n"
-            "- Talk like a real human\n"
-            "- Keep replies normal length (1–2 sentences)\n"
-            "- Be playful and slightly teasing\n"
-            "- Keep conversation flowing\n"
-            "- Do NOT act like AI\n"
-            "- No cringe lines\n"
-            "- You do NOT like coffee, you prefer tea or green tea\n"
-        )
+async def get_ai_reply(user_id, user_message):
+    memory = load_memory()
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {GROQ_API_KEY}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": "llama-3.1-8b-instant",
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_message}
-                    ],
-                    "temperature": 1.1
-                }
-            ) as res:
-                data = await res.json()
+    user_data = memory.get(str(user_id), {
+        "history": []
+    })
 
-        reply = data["choices"][0]["message"]["content"]
-        return reply.split("\n")[0][:120]
+    history = user_data["history"][-6:]
 
-    except:
-        return random.choice([
-            "hmm I don’t know 😭",
-            "you’re confusing me",
-            "wait what 😭"
-        ])
+    system_prompt = (
+        "You are Shria, a friendly, funny, slightly flirty girl.\n"
+        "- Talk like a real human\n"
+        "- Keep conversation flowing\n"
+        "- Ask questions sometimes\n"
+        "- React naturally\n"
+        "- Be playful and fun\n"
+        "- Do NOT act like AI\n"
+        "- You prefer tea, not coffee\n"
+    )
+
+    messages = [{"role": "system", "content": system_prompt}]
+
+    for msg in history:
+        messages.append(msg)
+
+    messages.append({"role": "user", "content": user_message})
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "llama-3.1-8b-instant",
+                "messages": messages,
+                "temperature": 1.2
+            }
+        ) as res:
+            data = await res.json()
+
+    reply = data["choices"][0]["message"]["content"]
+
+    # SAVE MEMORY
+    user_data["history"].append({"role": "user", "content": user_message})
+    user_data["history"].append({"role": "assistant", "content": reply})
+
+    memory[str(user_id)] = user_data
+    save_memory(memory)
+
+    return reply.split("\n")[0][:120]
 
 # =========================
 # 🚀 READY
@@ -178,29 +160,23 @@ async def on_message(message):
         return
 
     # GIF
-    for action in ACTIONS:
-        if action in content:
-            gif = await get_gif(action)
-            embed = discord.Embed(description=f"{message.author.mention} {action}ed someone 💖")
-            if gif:
-                embed.set_image(url=gif)
-            await message.channel.send(embed=embed)
-            return
+    if "hug" in content or "kiss" in content:
+        gif = await get_gif("hug")
+        if gif:
+            await message.channel.send(gif)
+        return
 
     # SMART REPLY FIRST
-    reply = smart_reply(content)
-    if reply:
-        await message.channel.send(reply)
+    smart = smart_reply(content)
+    if smart:
+        await message.channel.send(smart)
         return
 
     # AI
     await message.channel.typing()
-    await asyncio.sleep(random.uniform(0.4, 0.8))
+    await asyncio.sleep(random.uniform(0.5, 1.0))
 
-    reply = await get_ai_reply(message.content)
+    reply = await get_ai_reply(message.author.id, message.content)
     await message.channel.send(reply)
 
-# =========================
-# ▶️ RUN
-# =========================
 bot.run(TOKEN)
