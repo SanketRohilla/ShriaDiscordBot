@@ -39,6 +39,8 @@ class Music(commands.Cog):
 
         tracks = await wavelink.Playable.search(f"ytsearch:{search}")
 
+         print("TRACKS FOUND:", tracks)
+
         if not tracks:
             return await ctx.send("No results 💀")
 
