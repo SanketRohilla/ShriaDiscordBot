@@ -1,9 +1,7 @@
 import discord
 import random
 import aiohttp
-import asyncio
 import os
-import json
 from datetime import datetime
 from discord.ext import commands
 
@@ -36,48 +34,47 @@ async def get_gif(action):
 # =========================
 def get_today():
     now = datetime.now()
-    return f"{now.strftime('%A')}, {now.strftime('%d %B %Y')}"
+    return now.strftime("%A, %d %B %Y")
 
 # =========================
-# 🌡️ WEATHER
+# 🌡️ WEATHER (FIXED)
 # =========================
-async def get_india_weather():
+async def get_weather():
     try:
         url = "https://goweather.herokuapp.com/weather/Delhi"
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as res:
                 data = await res.json()
-        return data.get("temperature"), data.get("description")
+
+        temp = data.get("temperature")
+        desc = data.get("description")
+
+        if temp:
+            return f"india rn {temp}, {desc} 👀"
+        else:
+            return None
     except:
-        return None, None
+        return None
 
 # =========================
 # 💰 GOLD / SILVER
 # =========================
-async def get_gold_price():
+async def get_price(metal):
     try:
+        url = f"https://api.gold-api.com/price/{metal}"
         async with aiohttp.ClientSession() as session:
-            async with session.get("https://api.gold-api.com/price/XAU") as res:
+            async with session.get(url) as res:
                 data = await res.json()
-        return data["price"]
-    except:
-        return None
 
-async def get_silver_price():
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get("https://api.gold-api.com/price/XAG") as res:
-                data = await res.json()
-        return data["price"]
-    except:
-        return None
+        usd = data["price"]
 
-async def usd_to_inr(usd):
-    try:
+        # convert to INR
         async with aiohttp.ClientSession() as session:
             async with session.get("https://open.er-api.com/v6/latest/USD") as res:
-                data = await res.json()
-        return round(usd * data["rates"]["INR"], 2)
+                rate = (await res.json())["rates"]["INR"]
+
+        inr = round(usd * rate, 2)
+        return f"${usd} (~₹{inr})"
     except:
         return None
 
@@ -85,70 +82,76 @@ async def usd_to_inr(usd):
 # 📈 STOCKS
 # =========================
 STOCKS = {
-    "reliance": "RELIANCE.NS",
-    "tcs": "TCS.NS",
-    "tata": "TCS.NS",
     "infosys": "INFY.NS",
-    "infy": "INFY.NS",
+    "tcs": "TCS.NS",
+    "reliance": "RELIANCE.NS",
     "hdfc": "HDFCBANK.NS"
 }
 
-async def get_stock_price(symbol):
+async def get_stock(symbol):
     try:
         url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbol}"
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as res:
                 data = await res.json()
 
-        result = data.get("quoteResponse", {}).get("result", [])
+        result = data["quoteResponse"]["result"]
         if not result:
-            return None, None
+            return None
 
-        return result[0]["shortName"], result[0]["regularMarketPrice"]
+        name = result[0]["shortName"]
+        price = result[0]["regularMarketPrice"]
+
+        return f"{name} rn ₹{price} 👀"
     except:
-        return None, None
+        return None
 
 # =========================
-# 🍳 RECIPE
+# 🍳 RECIPES
 # =========================
-def is_serious_question(msg):
-    return any(k in msg for k in ["how to","recipe","make","cook","steps"])
-
-def get_simple_recipe(msg):
+def get_recipe(msg):
     if "cake" in msg:
-        return "cake:\n1. mix flour, sugar, eggs\n2. add milk + butter\n3. bake 180°C 30min 🍰"
+        return "cake:\n1 mix flour sugar eggs\n2 add milk butter\n3 bake 180C 🍰"
     if "tea" in msg:
-        return "tea:\n1. boil water\n2. add tea + milk\n3. sugar ☕"
+        return "tea:\n1 boil water\n2 add tea milk\n3 sugar ☕"
     if "bread" in msg:
-        return "bread:\n1. flour + yeast\n2. knead\n3. bake 🍞"
-    if "coffee" in msg:
-        return "coffee:\n1. boil water\n2. add coffee\n3. milk ☕"
+        return "bread:\n1 flour yeast water\n2 knead\n3 bake 🍞"
     return None
 
 # =========================
-# 🔁 SAY COMMAND
+# 🔁 SAY COMMAND (FIXED)
 # =========================
-def parse_say_command(msg):
-    try:
-        parts = msg.split()
-        if "say" not in parts:
+def parse_say(msg):
+    words = msg.split()
+
+    if "say" in words or "type" in words:
+        try:
+            if "say" in words:
+                i = words.index("say")
+            else:
+                i = words.index("type")
+
+            text = words[i+1]
+
+            # handle "20 times"
+            if "times" in words:
+                count = int(words[i+2])
+            else:
+                count = int(words[i+2])
+
+            if count > 50:
+                count = 50
+
+            return text, count
+        except:
             return None, None
 
-        i = parts.index("say")
-        word = parts[i + 1]
-        count = int(parts[i + 2])
-
-        if count > 50:
-            count = 50
-
-        return word, count
-    except:
-        return None, None
+    return None, None
 
 # =========================
 # 💬 AI
 # =========================
-async def get_ai_reply(user_message):
+async def ai_reply(msg):
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -161,19 +164,18 @@ async def get_ai_reply(user_message):
                     "model": "llama-3.1-8b-instant",
                     "messages": [
                         {"role": "system", "content": "short funny genz replies"},
-                        {"role": "user", "content": user_message}
+                        {"role": "user", "content": msg}
                     ]
                 }
             ) as res:
                 data = await res.json()
 
-        reply = data["choices"][0]["message"]["content"].split("\n")[0][:80]
+        reply = data["choices"][0]["message"]["content"][:80]
 
         if not any(e in reply for e in ["😭","💀","👀"]):
             reply += " 😭"
 
         return reply
-
     except:
         return "idk 😭"
 
@@ -187,70 +189,66 @@ async def on_message(message):
 
     content = message.content.lower()
 
-    if "shria" not in content and bot.user not in message.mentions:
+    if "shria" not in content:
         return
 
-    # SAY
-    if "say" in content:
-        word, count = parse_say_command(content)
-        if word and count:
-            await message.channel.send("uhh bro ok got u 😭")
-            repeated = " ".join([word] * count)
-            await message.channel.send(repeated)
-            return
+    # 🔁 SAY
+    text, count = parse_say(content)
+    if text and count:
+        await message.channel.send("okok chill 😭 here u go")
+        await message.channel.send(" ".join([text]*count))
+        return
 
-    # DATE
+    # 🌡️ WEATHER
+    if "temp" in content or "temperature" in content or "weather" in content:
+        w = await get_weather()
+        if w:
+            await message.channel.send(w)
+        else:
+            await message.channel.send("weather bugging rn 😭")
+        return
+
+    # 📅 DATE
     if "date" in content or "today" in content:
-        await message.channel.send(f"today is {get_today()} 👀")
+        await message.channel.send(get_today())
         return
 
-    # WEATHER
-    if "weather" in content or "temperature" in content:
-        temp, desc = await get_india_weather()
-        await message.channel.send(f"india rn {temp}, {desc} 👀")
-        return
-
-    # GOLD
+    # 💰 GOLD
     if "gold" in content:
-        usd = await get_gold_price()
-        inr = await usd_to_inr(usd)
-        await message.channel.send(f"gold rn ${usd} (~₹{inr}) 👀")
+        p = await get_price("XAU")
+        await message.channel.send(f"gold rn {p} 👀" if p else "error 😭")
         return
 
-    # SILVER
+    # 💰 SILVER
     if "silver" in content:
-        usd = await get_silver_price()
-        inr = await usd_to_inr(usd)
-        await message.channel.send(f"silver rn ${usd} (~₹{inr}) 👀")
+        p = await get_price("XAG")
+        await message.channel.send(f"silver rn {p} 👀" if p else "error 😭")
         return
 
-    # STOCK
+    # 📈 STOCK
     for key in STOCKS:
         if key in content:
-            name, price = await get_stock_price(STOCKS[key])
-            if price:
-                await message.channel.send(f"{name} rn ₹{price} 👀")
-            else:
-                await message.channel.send("market closed rn 💀")
+            res = await get_stock(STOCKS[key])
+            await message.channel.send(res if res else "market weird rn 💀")
             return
 
-    # RECIPE
-    if is_serious_question(content):
-        recipe = get_simple_recipe(content)
-        if recipe:
-            await message.channel.send(recipe)
+    # 🍳 RECIPE
+    if "how to" in content or "make" in content:
+        r = get_recipe(content)
+        if r:
+            await message.channel.send(r)
             return
 
     # GIF
-    for action in ACTIONS:
-        if action in content:
-            gif = await get_gif(action)
+    for a in ACTIONS:
+        if a in content:
+            gif = await get_gif(a)
             if gif:
                 await message.channel.send(gif)
             return
 
     # AI
-    reply = await get_ai_reply(message.content)
+    reply = await ai_reply(message.content)
     await message.channel.send(reply)
 
 bot.run(TOKEN)
