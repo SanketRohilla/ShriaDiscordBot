@@ -38,7 +38,7 @@ def get_today():
     return datetime.now().strftime("%A, %d %B %Y")
 
 # =========================
-# 🌡️ WEATHER (FIXED HARD)
+# 🌡️ WEATHER
 # =========================
 async def get_weather():
     try:
@@ -51,16 +51,15 @@ async def get_weather():
         desc = data.get("description")
 
         if temp:
-            return f"Delhi rn {temp}, {desc} 👀"
+            return f"Delhi rn {temp}, {desc} 🌤️"
 
     except:
         pass
 
-    # fallback ALWAYS
     return random.choice([
-        "Delhi rn around 30°C kinda warm 😭",
+        "Delhi rn around 30°C kinda warm ☀️",
         "prob like 28-32°C rn 👀",
-        "lowkey hot outside ngl ☀️"
+        "lowkey hot outside ngl 🌡️"
     ])
 
 # =========================
@@ -135,27 +134,18 @@ def parse_say(msg):
     return None, None
 
 # =========================
-# 🎭 SMART EMOJI SYSTEM
+# 🎭 EMOJI SYSTEM
 # =========================
 def pick_emoji(msg):
-    msg = msg.lower()
-
-    if "lol" in msg or "funny" in msg:
+    if "love" in msg:
+        return random.choice(["❤️","😘","😏"])
+    if "funny" in msg:
         return random.choice(["😂","🤣","💀"])
-
-    if "love" in msg or "cute" in msg:
-        return random.choice(["❤️","😏","😘"])
-
-    if "angry" in msg or "mad" in msg:
-        return random.choice(["😤","💢","😒"])
-
     if "money" in msg or "stock" in msg:
         return random.choice(["💸","📈","🤑"])
-
     if "weather" in msg or "temp" in msg:
         return random.choice(["☀️","🌡️","🌤️"])
-
-    return random.choice(["😭","👀","😏","💀","😂"])
+    return random.choice(["😭","💀","👀","😏","😂"])
 
 # =========================
 # 💬 AI
@@ -173,7 +163,7 @@ async def ai_reply(msg):
                     "model": "llama-3.1-8b-instant",
                     "messages": [
                         {"role": "system", "content":
-                         "You are Shria, a funny, flirty, real discord girl. Be helpful when needed."},
+                         "You are Shria, funny, flirty, real discord girl. Answer properly if serious."},
                         {"role": "user", "content": msg}
                     ]
                 }
@@ -181,9 +171,7 @@ async def ai_reply(msg):
                 data = await res.json()
 
         reply = data["choices"][0]["message"]["content"].split("\n")[0][:100]
-
-        emoji = pick_emoji(reply)
-        return f"{reply} {emoji}"
+        return f"{reply} {pick_emoji(reply)}"
 
     except:
         return f"idk {pick_emoji(msg)}"
@@ -223,6 +211,19 @@ async def on_message(message):
 
     if "bye" in content:
         active_users[user_id] = False
+
+    # 📢 TAG EVERYONE
+    if "tag everyone" in content or "@everyone" in content:
+        await message.channel.send(
+            random.choice([
+                "@everyone ayo wake up 💀",
+                "@everyone get in here rn 😭",
+                "@everyone stop sleeping 😂",
+                "@everyone party time 👀"
+            ]),
+            allowed_mentions=discord.AllowedMentions(everyone=True)
+        )
+        return
 
     # SAY
     text, count = parse_say(content)
