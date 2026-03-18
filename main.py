@@ -4,19 +4,14 @@ import aiohttp
 import asyncio
 import os
 import json
+from datetime import datetime
 
 from discord.ext import commands
 
-# =========================
-# 🔐 ENV
-# =========================
 TOKEN = os.getenv("TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GIPHY_API_KEY = os.getenv("GIPHY_API_KEY")
 
-# =========================
-# ⚙️ BOT
-# =========================
 intents = discord.Intents.default()
 intents.message_content = True
 
@@ -40,63 +35,86 @@ def save_memory(data):
         json.dump(data, f, indent=2)
 
 # =========================
-# 🎬 GIF SYSTEM
+# 🎬 GIF
 # =========================
 gif_cache = {}
-
-ACTIONS = [
-    "kiss","hug","slap","punch","kick",
-    "cry","blush","laugh","pat","cuddle"
-]
+ACTIONS = ["kiss","hug","slap","punch","kick","cry","blush","laugh"]
 
 async def get_gif(action):
     try:
         url = f"https://api.giphy.com/v1/gifs/search?api_key={GIPHY_API_KEY}&q=anime+{action}&limit=40"
-
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as res:
                 data = await res.json()
 
         gifs = [g["images"]["original"]["url"] for g in data["data"]]
-
-        if not gifs:
-            return None
-
-        if action not in gif_cache:
-            gif_cache[action] = []
-
-        available = list(set(gifs) - set(gif_cache[action]))
-
-        if not available:
-            gif_cache[action] = []
-            available = gifs
-
-        gif = random.choice(available)
-        gif_cache[action].append(gif)
-
-        return gif
-
+        return random.choice(gifs) if gifs else None
     except:
         return None
 
 # =========================
-# 😏 SMART HUMAN REPLIES
+# 📅 DATE + DAY
+# =========================
+def get_today():
+    now = datetime.now()
+    date = now.strftime("%d %B %Y")
+    day = now.strftime("%A")
+    return f"{day}, {date}"
+
+# =========================
+# 🌡️ WEATHER (INDIA - FREE)
+# =========================
+async def get_india_weather():
+    try:
+        # Delhi used as default India temp
+        url = "https://wttr.in/Delhi?format=j1"
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as res:
+                data = await res.json()
+
+        temp = data["current_condition"][0]["temp_C"]
+        desc = data["current_condition"][0]["weatherDesc"][0]["value"]
+
+        return temp, desc
+
+    except:
+        return None, None
+
+# =========================
+# 💰 GOLD / SILVER
+# =========================
+async def get_gold_price():
+    try:
+        url = "https://api.gold-api.com/price/XAU"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as res:
+                data = await res.json()
+        return data["price"]
+    except:
+        return None
+
+async def get_silver_price():
+    try:
+        url = "https://api.gold-api.com/price/XAG"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as res:
+                data = await res.json()
+        return data["price"]
+    except:
+        return None
+
+# =========================
+# 😏 SMART REPLIES
 # =========================
 def smart_reply(msg):
     msg = msg.lower()
 
-    if "5 feet" in msg or "short" in msg:
+    if "short" in msg or "5 feet" in msg:
         return random.choice([
             "so what 😭 still better than you",
             "short but elite 💀",
-            "why u so focused on my height 👀"
-        ])
-
-    if "dumb" in msg:
-        return random.choice([
-            "wow rude 😭",
-            "nah you just mad 💀",
-            "look who's talking"
+            "why u so focused on that 👀"
         ])
 
     if "coffee" in msg:
@@ -106,17 +124,10 @@ def smart_reply(msg):
             "coffee mid fr 💀"
         ])
 
-    if "what" in msg:
-        return random.choice([
-            "nothing 😭",
-            "idk you tell me",
-            "bruhh chill 💀"
-        ])
-
     return None
 
 # =========================
-# 💬 AI REPLY (BALANCED)
+# 💬 AI CHAT
 # =========================
 async def get_ai_reply(user_id, user_message):
     try:
@@ -126,18 +137,13 @@ async def get_ai_reply(user_id, user_message):
 
         system_prompt = (
             "You are Shria, a real discord girl.\n"
-            
-            "RULES:\n"
-            "- 1 short sentence (max 10–12 words)\n"
-            "- casual chat style\n"
-            "- slightly funny or playful\n"
-            "- sometimes Gen Z words (bruhh, idk, fr, lowkey)\n"
-            "- natural emojis (😭 💀 👀 ✨ 😏)\n"
-            "- keep convo going sometimes\n"
-            "- NO roleplay words (no giggles, smiles)\n"
-            
-            "IMPORTANT:\n"
-            "- you prefer tea, not coffee\n"
+            "- short reply (1 sentence)\n"
+            "- casual + slightly funny\n"
+            "- Gen Z words sometimes\n"
+            "- natural emojis\n"
+            "- no roleplay words\n"
+            "- keep convo flowing\n"
+            "- prefer tea not coffee\n"
         )
 
         messages = [{"role": "system", "content": system_prompt}]
@@ -164,17 +170,14 @@ async def get_ai_reply(user_id, user_message):
                 data = await res.json()
 
         reply = data["choices"][0]["message"]["content"].strip()
-
-        # cut length
         reply = reply.split("\n")[0]
+
         if len(reply.split()) > 12:
             reply = " ".join(reply.split()[:12])
 
-        # force emoji if missing
         if not any(e in reply for e in ["😭","💀","👀","✨","😏"]):
             reply += " " + random.choice(["😭","💀","👀","✨","😏"])
 
-        # save memory
         user_data["history"].append({"role": "user", "content": user_message})
         user_data["history"].append({"role": "assistant", "content": reply})
 
@@ -184,18 +187,14 @@ async def get_ai_reply(user_id, user_message):
         return reply
 
     except:
-        return random.choice([
-            "idk 😭",
-            "bruhh 💀",
-            "nahh 👀"
-        ])
+        return random.choice(["idk 😭","bruhh 💀","nahh 👀"])
 
 # =========================
 # 🚀 READY
 # =========================
 @bot.event
 async def on_ready():
-    print(f"💖 Logged in as {bot.user}")
+    print(f"Logged in as {bot.user}")
 
 # =========================
 # 💬 MAIN
@@ -215,17 +214,47 @@ async def on_message(message):
     if not is_called:
         return
 
+    # 📅 DATE
+    if "date" in content or "day" in content or "today" in content:
+        await message.channel.send(f"today is {get_today()} 👀")
+        return
+
+    # 🌡️ WEATHER INDIA
+    if "weather" in content or "temperature" in content:
+        temp, desc = await get_india_weather()
+        if temp:
+            await message.channel.send(f"india rn {temp}°C, {desc} 👀")
+        else:
+            await message.channel.send("idk rn 😭")
+        return
+
+    # 💰 GOLD
+    if "gold" in content:
+        price = await get_gold_price()
+        if price:
+            await message.channel.send(f"gold rn ${price} 👀")
+        else:
+            await message.channel.send("idk rn 😭")
+        return
+
+    # 💰 SILVER
+    if "silver" in content:
+        price = await get_silver_price()
+        if price:
+            await message.channel.send(f"silver rn ${price} 👀")
+        else:
+            await message.channel.send("idk rn 😭")
+        return
+
     # GIF
     for action in ACTIONS:
         if action in content:
             gif = await get_gif(action)
-            embed = discord.Embed(description=f"{message.author.mention} {action}ed someone 💖")
             if gif:
-                embed.set_image(url=gif)
-            await message.channel.send(embed=embed)
+                await message.channel.send(gif)
             return
 
-    # SMART REPLY FIRST
+    # SMART
     smart = smart_reply(content)
     if smart:
         await message.channel.send(smart)
