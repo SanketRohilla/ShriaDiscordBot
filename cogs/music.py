@@ -10,7 +10,7 @@ class Music(commands.Cog):
     async def on_ready(self):
         try:
             node = wavelink.Node(
-                uri="https://lavalink-2026-production-536b.up.railway.app",
+                uri="http://lavalink-2026-production-536b.up.railway.app",
                 password="mysuperpass"
             )
 
