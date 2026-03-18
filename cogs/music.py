@@ -6,87 +6,67 @@ class Music(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    async def connect_node(self):
-        await self.bot.wait_until_ready()
-
+    @commands.Cog.listener()
+    async def on_ready(self):
         try:
-            await wavelink.NodePool.create_node(
-                bot=self.bot,
-                host="lavalink-2026-production-536b.up.railway.app",
-                port=443,
-                password="mysuperpass",
-                https=True
+            node = wavelink.Node(
+                uri="https://lavalink-2026-production-536b.up.railway.app",
+                password="mysuperpass"
             )
+
+            await wavelink.Pool.connect(client=self.bot, nodes=[node])
             print("✅ Lavalink connected!")
         except Exception as e:
             print(f"❌ Lavalink error: {e}")
 
-    @commands.Cog.listener()
-    async def on_ready(self):
-        await self.connect_node()
-
-    # =======================
     # 🎵 PLAY
-    # =======================
     @commands.command(name="pl")
     async def play(self, ctx, *, search: str):
         if not ctx.author.voice:
             return await ctx.send("Join VC first 😭")
 
-        vc: wavelink.Player = ctx.voice_client
+        player: wavelink.Player = ctx.voice_client
 
-        if not vc:
-            vc = await ctx.author.voice.channel.connect(cls=wavelink.Player)
+        if not player:
+            player = await ctx.author.voice.channel.connect(cls=wavelink.Player)
 
-        tracks = await wavelink.YouTubeTrack.search(search)
+        tracks = await wavelink.Playable.search(search)
 
         if not tracks:
             return await ctx.send("No results 😭")
 
         track = tracks[0]
 
-        await vc.play(track)
+        await player.play(track)
 
         await ctx.send(f"🎵 Now playing: **{track.title}**")
 
-    # =======================
     # ⏸ PAUSE
-    # =======================
     @commands.command(name="ps")
     async def pause(self, ctx):
-        vc = ctx.voice_client
-        if vc:
-            await vc.pause()
+        if ctx.voice_client:
+            await ctx.voice_client.pause()
             await ctx.send("Paused ⏸")
 
-    # =======================
     # ▶ RESUME
-    # =======================
     @commands.command(name="rs")
     async def resume(self, ctx):
-        vc = ctx.voice_client
-        if vc:
-            await vc.resume()
+        if ctx.voice_client:
+            await ctx.voice_client.resume()
             await ctx.send("Resumed ▶")
 
-    # =======================
     # ⏹ STOP
-    # =======================
     @commands.command(name="st")
     async def stop(self, ctx):
-        vc = ctx.voice_client
-        if vc:
-            await vc.stop()
+        if ctx.voice_client:
+            await ctx.voice_client.stop()
             await ctx.send("Stopped ⏹")
 
-    # =======================
     # ❌ DISCONNECT
-    # =======================
     @commands.command(name="dc")
-    async def disconnect(self, ctx):
-        vc = ctx.voice_client
-        if vc:
-            await vc.disconnect()
+    async def dc(self, ctx):
+        if ctx.voice_client:
+            await ctx.voice_client.disconnect()
             await ctx.send("Disconnected 👋")
 
 async def setup(bot):
