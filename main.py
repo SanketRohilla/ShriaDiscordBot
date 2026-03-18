@@ -1,132 +1,58 @@
 import discord
 import random
-import requests
-import yt_dlp
+import aiohttp
 import asyncio
 import os
 
 from discord.ext import commands
 
-# ===== CONFIG =====
+# =========================
+# 🔐 ENV VARIABLES
+# =========================
 TOKEN = os.getenv("TOKEN")
-GIPHY_API_KEY = os.getenv("GIPHY_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-cookies_data = os.getenv("COOKIES")
+GIPHY_API_KEY = os.getenv("GIPHY_API_KEY")
 
-# ===== BOT SETUP =====
+# =========================
+# ⚙️ BOT SETUP
+# =========================
 intents = discord.Intents.default()
 intents.message_content = True
-intents.voice_states = True
 
 bot = commands.Bot(command_prefix="", intents=intents)
 
-# ===== YTDL SETUP =====
-if cookies_data:
-    with open("cookies.txt", "w") as f:
-        f.write(cookies_data)
+# =========================
+# 🎌 ACTIONS
+# =========================
+ACTIONS = ["kiss", "hug", "slap", "punch", "kick", "cry", "blush", "laugh"]
 
-ytdl = yt_dlp.YoutubeDL({
-    'format': 'bestaudio/best',
-    'quiet': True,
-    'noplaylist': True,
-    'cookiefile': 'cookies.txt',
-})
+# =========================
+# 🎬 GIF FETCH (LESS REPEAT)
+# =========================
+async def get_gif(action):
+    try:
+        url = f"https://api.giphy.com/v1/gifs/search?api_key={GIPHY_API_KEY}&q=anime+{action}&limit=50"
 
-# ===== READY =====
-@bot.event
-async def on_ready():
-    print(f"💖 Logged in as {bot.user}")
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as res:
+                data = await res.json()
 
-# ===== GIF FUNCTION =====
-def get_gif(action):
-    url = f"https://api.giphy.com/v1/gifs/search?api_key={GIPHY_API_KEY}&q=anime {action}&limit=25"
-    data = requests.get(url).json()
-    gifs = [g['images']['original']['url'] for g in data['data']]
-    return random.choice(gifs) if gifs else None
+        gifs = [g["images"]["original"]["url"] for g in data["data"]]
 
-# ===== AUDIO FETCH =====
-async def get_audio_url(query):
-    loop = asyncio.get_event_loop()
-    data = await loop.run_in_executor(
-        None,
-        lambda: ytdl.extract_info(f"ytsearch:{query}", download=False)
-    )
-    return data['entries'][0]['url']
+        if gifs:
+            random.shuffle(gifs)
+            return gifs[0]
 
-# ===== MAIN MESSAGE HANDLER =====
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
+        return None
 
-    content = message.content.lower()
+    except Exception as e:
+        print("GIF ERROR:", e)
+        return None
 
-    # ===== GIF COMMANDS =====
-    actions = ["slap", "kiss", "hug", "kick", "cry", "blush", "laugh"]
-    for action in actions:
-        if action in content:
-            gif = get_gif(action)
-            if gif:
-                await message.channel.send(f"{message.author.mention} {action}s someone 💖\n{gif}")
-            return
-
-    # ===== MUSIC PLAY =====
-    if content.startswith("/play"):
-        query = message.content.replace("/play", "").strip()
-
-        if not message.author.voice:
-            await message.channel.send("❌ Join VC first")
-            return
-
-        channel = message.author.voice.channel
-        vc = discord.utils.get(bot.voice_clients, guild=message.guild)
-
-        # SAFE CONNECT
-        if not vc:
-            try:
-                vc = await channel.connect(timeout=30)
-            except Exception as e:
-                await message.channel.send(f"❌ Voice connection failed: {e}")
-                return
-        else:
-            try:
-                await vc.move_to(channel)
-            except:
-                pass
-
-        await message.channel.send(f"🎶 Playing: {query}")
-
-        try:
-            url = await get_audio_url(query)
-        except Exception as e:
-            await message.channel.send("❌ Error fetching song")
-            print(e)
-            return
-
-        if vc.is_playing():
-            vc.stop()
-
-        source = discord.FFmpegPCMAudio(
-            url,
-            executable="/usr/bin/ffmpeg"
-        )
-
-        try:
-            vc.play(source)
-        except Exception as e:
-            await message.channel.send(f"❌ Play error: {e}")
-
-        return
-
-    # ===== STOP =====
-    if content.startswith("/stop"):
-        vc = discord.utils.get(bot.voice_clients, guild=message.guild)
-        if vc:
-            await vc.disconnect()
-            await message.channel.send("⏹️ Stopped")
-        return
-
-    # ===== AI CHAT =====
+# =========================
+# 💬 AI RESPONSE (GROQ)
+# =========================
+async def get_reply(user_message):
     try:
         headers = {
             "Authorization": f"Bearer {GROQ_API_KEY}",
@@ -134,21 +60,84 @@ async def on_message(message):
         }
 
         json_data = {
-            "model": "mixtral-8x7b-32768",
-            "messages": [{"role": "user", "content": message.content}]
+            "model": "llama-3.1-8b-instant",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are Shria, cute, flirty, funny, playful anime girl. Short replies only."
+                },
+                {"role": "user", "content": user_message}
+            ],
+            "temperature": 1.1
         }
 
-        res = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers=headers,
-            json=json_data
-        )
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers=headers,
+                json=json_data
+            ) as res:
+                data = await res.json()
 
-        reply = res.json()["choices"][0]["message"]["content"]
+        return data["choices"][0]["message"]["content"]
+
+    except Exception as e:
+        print("AI ERROR:", e)
+        return "ugh my brain lagged 😭"
+
+# =========================
+# 🚀 READY
+# =========================
+@bot.event
+async def on_ready():
+    print(f"💖 Logged in as {bot.user}")
+
+# =========================
+# 💬 MAIN HANDLER
+# =========================
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
+    content = message.content.lower()
+
+    # =====================
+    # 🎬 ACTION GIFS
+    # =====================
+    for action in ACTIONS:
+        if action in content:
+            gif = await get_gif(action)
+
+            if message.mentions:
+                target = message.mentions[0]
+                text = f"{message.author.mention} {action}ed {target.mention} 😭"
+            else:
+                text = f"{message.author.mention} {action}ed someone 😭"
+
+            embed = discord.Embed(description=text)
+
+            if gif:
+                embed.set_image(url=gif)
+
+            await message.channel.send(embed=embed)
+            return
+
+    # =====================
+    # 💬 AI CHAT (ALWAYS WORKS)
+    # =====================
+    try:
+        await message.channel.typing()
+        await asyncio.sleep(0.5)
+
+        reply = await get_reply(message.content)
         await message.channel.send(reply)
 
-    except:
-        pass
+    except Exception as e:
+        print("MAIN ERROR:", e)
+        await message.channel.send("😭 something broke")
 
-# ===== RUN =====
+# =========================
+# ▶️ RUN
+# =========================
 bot.run(TOKEN)
