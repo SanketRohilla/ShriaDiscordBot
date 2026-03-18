@@ -52,14 +52,13 @@ async def get_weather():
 
         if temp:
             return f"Delhi rn {temp}, {desc} 🌤️"
-
     except:
         pass
 
     return random.choice([
-        "Delhi rn around 30°C kinda warm ☀️",
-        "prob like 28-32°C rn 👀",
-        "lowkey hot outside ngl 🌡️"
+        "kinda warm outside... like me 😏",
+        "hot weather fr ☀️ stay hydrated",
+        "lowkey perfect weather to vibe 👀"
     ])
 
 # =========================
@@ -134,21 +133,21 @@ def parse_say(msg):
     return None, None
 
 # =========================
-# 🎭 EMOJI SYSTEM
+# 💋 EMOJI SYSTEM
 # =========================
 def pick_emoji(msg):
     if "love" in msg:
         return random.choice(["❤️","😘","😏"])
+    if "hi" in msg or "hey" in msg:
+        return random.choice(["👀","😏","✨"])
     if "funny" in msg:
         return random.choice(["😂","🤣","💀"])
     if "money" in msg or "stock" in msg:
         return random.choice(["💸","📈","🤑"])
-    if "weather" in msg or "temp" in msg:
-        return random.choice(["☀️","🌡️","🌤️"])
-    return random.choice(["😭","💀","👀","😏","😂"])
+    return random.choice(["😏","👀","💀","😂","✨"])
 
 # =========================
-# 💬 AI
+# 💬 AI (SKY)
 # =========================
 async def ai_reply(msg):
     try:
@@ -163,7 +162,7 @@ async def ai_reply(msg):
                     "model": "llama-3.1-8b-instant",
                     "messages": [
                         {"role": "system", "content":
-                         "You are Shria, funny, flirty, real discord girl. Answer properly if serious."},
+                         "You are Sky, a playful, flirty, smart discord girl. Be fun but helpful."},
                         {"role": "user", "content": msg}
                     ]
                 }
@@ -174,7 +173,7 @@ async def ai_reply(msg):
         return f"{reply} {pick_emoji(reply)}"
 
     except:
-        return f"idk {pick_emoji(msg)}"
+        return f"idk but you're kinda cute tho {pick_emoji(msg)}"
 
 # =========================
 # 🚀 MAIN
@@ -198,7 +197,7 @@ async def on_message(message):
             pass
 
     trigger = (
-        "shria" in content or
+        "sky" in content or
         bot.user in message.mentions or
         is_reply or
         active_users.get(user_id)
@@ -209,66 +208,46 @@ async def on_message(message):
 
     active_users[user_id] = True
 
-    if "bye" in content:
-        active_users[user_id] = False
-
     # 📢 TAG EVERYONE
-    if "tag everyone" in content or "@everyone" in content:
+    if "tag everyone" in content:
         await message.channel.send(
-            random.choice([
-                "@everyone ayo wake up 💀",
-                "@everyone get in here rn 😭",
-                "@everyone stop sleeping 😂",
-                "@everyone party time 👀"
-            ]),
+            "@everyone hey wake up cuties 😏",
             allowed_mentions=discord.AllowedMentions(everyone=True)
         )
         return
 
-    # SAY
+    # 🔁 SAY
     text, count = parse_say(content)
     if text:
-        await message.channel.send(f"okok chill {pick_emoji(content)}")
+        await message.channel.send(f"ugh fine 😭 but only for u")
         await message.channel.send(" ".join([text]*count))
         return
 
-    # WEATHER
+    # 🌡️ WEATHER
     if "temp" in content or "weather" in content:
         await message.channel.send(await get_weather())
         return
 
-    # DATE
+    # 📅 DATE
     if "date" in content:
         await message.channel.send(get_today())
         return
 
-    # GOLD
-    if "gold" in content:
-        p = await get_price("XAU")
-        await message.channel.send(f"gold rn {p}" if p else "error 💀")
-        return
-
-    # SILVER
-    if "silver" in content:
-        p = await get_price("XAG")
-        await message.channel.send(f"silver rn {p}" if p else "error 💀")
-        return
-
-    # STOCK
+    # 📈 STOCK
     for key in STOCKS:
         if key in content:
             res = await get_stock(STOCKS[key])
-            await message.channel.send(res if res else "market weird rn 💀")
+            await message.channel.send(res if res else "market acting weird 💀")
             return
 
-    # RECIPE
+    # 🍳 RECIPE
     if "how to" in content or "make" in content:
         r = get_recipe(content)
         if r:
             await message.channel.send(r)
             return
 
-    # GIF
+    # 🎬 GIF
     for a in ACTIONS:
         if a in content:
             gif = await get_gif(a)
@@ -276,7 +255,7 @@ async def on_message(message):
                 await message.channel.send(gif)
             return
 
-    # AI
+    # 💬 AI
     reply = await ai_reply(message.content)
     await message.channel.send(reply)
 
