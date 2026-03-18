@@ -11,6 +11,7 @@ from discord.ext import commands
 TOKEN = os.getenv("TOKEN")
 GIPHY_API_KEY = os.getenv("GIPHY_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+cookies_data = os.getenv("COOKIES")
 
 # ===== BOT SETUP =====
 intents = discord.Intents.default()
@@ -20,12 +21,16 @@ intents.voice_states = True
 bot = commands.Bot(command_prefix="", intents=intents)
 
 # ===== YTDL SETUP =====
+if cookies_data:
+    with open("cookies.txt", "w") as f:
+        f.write(cookies_data)
+        
 ytdl = yt_dlp.YoutubeDL({
     'format': 'bestaudio/best',
     'quiet': True,
     'noplaylist': True,
+    'cookiefile': 'cookies.txt',
 })
-
 # ===== READY =====
 @bot.event
 async def on_ready():
@@ -64,39 +69,54 @@ async def on_message(message):
                 await message.channel.send(f"{message.author.mention} {action}s someone 💖\n{gif}")
             return
 
-    # ===== MUSIC PLAY =====
-    if content.startswith("/play"):
-        query = message.content.replace("/play", "").strip()
+   # ===== MUSIC PLAY =====
+if content.startswith("/play"):
+    query = message.content.replace("/play", "").strip()
 
-        if not message.author.voice:
-            await message.channel.send("❌ Join VC first")
-            return
+    if not message.author.voice:
+        await message.channel.send("❌ Join VC first")
+        return
 
-        channel = message.author.voice.channel
-        vc = discord.utils.get(bot.voice_clients, guild=message.guild)
+    channel = message.author.voice.channel
+    vc = discord.utils.get(bot.voice_clients, guild=message.guild)
 
-        if not vc:
-            vc = await channel.connect(reconnect=True)
-        else:
-            await vc.move_to(channel)
-
-        await message.channel.send(f"🎶 Playing: {query}")
-
+    # 🔥 SAFE CONNECT (NO 4017 ERROR)
+    if not vc:
         try:
-            url = await get_audio_url(query)
-        except:
-            await message.channel.send("❌ Error fetching song")
+            vc = await channel.connect(timeout=30)
+        except Exception as e:
+            await message.channel.send(f"❌ Voice connection failed: {e}")
             return
+    else:
+        try:
+            await vc.move_to(channel)
+        except:
+            pass
 
-        if vc.is_playing():
-            vc.stop()
+    await message.channel.send(f"🎶 Playing: {query}")
 
-        source = discord.FFmpegPCMAudio(
-            url,
-            executable="ffmpeg"
-        )
+    # 🔥 GET AUDIO
+    try:
+        url = await get_audio_url(query)
+    except Exception as e:
+        await message.channel.send("❌ Error fetching song")
+        print(e)
+        return
 
+    # 🔥 STOP OLD
+    if vc.is_playing():
+        vc.stop()
+
+    # 🔥 FIX FFMPEG PATH
+    source = discord.FFmpegPCMAudio(
+        url,
+        executable="/usr/bin/ffmpeg"  # ✅ IMPORTANT FIX
+    )
+
+    try:
         vc.play(source)
+    except Exception as e:
+        await message.channel.send(f"❌ Play error: {e}")
 
     # ===== STOP =====
     elif content.startswith("/stop"):
