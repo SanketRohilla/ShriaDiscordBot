@@ -13,6 +13,8 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="", intents=intents)
 
+active_users = {}
+
 # =========================
 # 🎬 GIF
 # =========================
@@ -33,53 +35,41 @@ async def get_gif(action):
 # 📅 DATE
 # =========================
 def get_today():
-    now = datetime.now()
-    return now.strftime("%A, %d %B %Y")
+    return datetime.now().strftime("%A, %d %B %Y")
 
 # =========================
 # 🌡️ WEATHER (FIXED)
 # =========================
 async def get_weather():
     try:
-        url = "https://goweather.herokuapp.com/weather/Delhi"
+        url = "https://wttr.in/Delhi?format=3"
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as res:
-                data = await res.json()
-
-        temp = data.get("temperature")
-        desc = data.get("description")
-
-        if temp:
-            return f"india rn {temp}, {desc} 👀"
-        else:
-            return None
+                return await res.text()
     except:
-        return None
+        return "Delhi ~30°C 👀"
 
 # =========================
 # 💰 GOLD / SILVER
 # =========================
 async def get_price(metal):
     try:
-        url = f"https://api.gold-api.com/price/{metal}"
         async with aiohttp.ClientSession() as session:
-            async with session.get(url) as res:
+            async with session.get(f"https://api.gold-api.com/price/{metal}") as res:
                 data = await res.json()
 
         usd = data["price"]
 
-        # convert to INR
         async with aiohttp.ClientSession() as session:
             async with session.get("https://open.er-api.com/v6/latest/USD") as res:
                 rate = (await res.json())["rates"]["INR"]
 
-        inr = round(usd * rate, 2)
-        return f"${usd} (~₹{inr})"
+        return f"${usd} (~₹{round(usd*rate,2)})"
     except:
         return None
 
 # =========================
-# 📈 STOCKS
+# 📈 STOCK
 # =========================
 STOCKS = {
     "infosys": "INFY.NS",
@@ -99,15 +89,12 @@ async def get_stock(symbol):
         if not result:
             return None
 
-        name = result[0]["shortName"]
-        price = result[0]["regularMarketPrice"]
-
-        return f"{name} rn ₹{price} 👀"
+        return f"{result[0]['shortName']} rn ₹{result[0]['regularMarketPrice']} 👀"
     except:
         return None
 
 # =========================
-# 🍳 RECIPES
+# 🍳 RECIPE
 # =========================
 def get_recipe(msg):
     if "cake" in msg:
@@ -115,42 +102,29 @@ def get_recipe(msg):
     if "tea" in msg:
         return "tea:\n1 boil water\n2 add tea milk\n3 sugar ☕"
     if "bread" in msg:
-        return "bread:\n1 flour yeast water\n2 knead\n3 bake 🍞"
+        return "bread:\n1 flour yeast\n2 knead\n3 bake 🍞"
     return None
 
 # =========================
-# 🔁 SAY COMMAND (FIXED)
+# 🔁 SAY
 # =========================
 def parse_say(msg):
     words = msg.split()
-
     if "say" in words or "type" in words:
         try:
-            if "say" in words:
-                i = words.index("say")
-            else:
-                i = words.index("type")
-
+            i = words.index("say") if "say" in words else words.index("type")
             text = words[i+1]
-
-            # handle "20 times"
-            if "times" in words:
-                count = int(words[i+2])
-            else:
-                count = int(words[i+2])
-
-            if count > 50:
-                count = 50
-
-            return text, count
+            count = int(words[i+2])
+            return text, min(count, 50)
         except:
             return None, None
-
     return None, None
 
 # =========================
 # 💬 AI
 # =========================
+EMOJIS = ["😭","💀","👀","😂","😏"]
+
 async def ai_reply(msg):
     try:
         async with aiohttp.ClientSession() as session:
@@ -163,19 +137,21 @@ async def ai_reply(msg):
                 json={
                     "model": "llama-3.1-8b-instant",
                     "messages": [
-                        {"role": "system", "content": "short funny genz replies"},
+                        {"role": "system", "content":
+                         "You are Shria, funny, flirty, casual, smart. Answer properly if asked serious question."},
                         {"role": "user", "content": msg}
                     ]
                 }
             ) as res:
                 data = await res.json()
 
-        reply = data["choices"][0]["message"]["content"][:80]
+        reply = data["choices"][0]["message"]["content"].split("\n")[0][:100]
 
-        if not any(e in reply for e in ["😭","💀","👀"]):
-            reply += " 😭"
+        if not any(e in reply for e in EMOJIS):
+            reply += " " + random.choice(EMOJIS)
 
         return reply
+
     except:
         return "idk 😭"
 
@@ -188,51 +164,70 @@ async def on_message(message):
         return
 
     content = message.content.lower()
+    user_id = message.author.id
 
-    if "shria" not in content:
+    # reply detection
+    is_reply = False
+    if message.reference:
+        try:
+            msg = await message.channel.fetch_message(message.reference.message_id)
+            if msg.author == bot.user:
+                is_reply = True
+        except:
+            pass
+
+    trigger = (
+        "shria" in content or
+        bot.user in message.mentions or
+        is_reply or
+        active_users.get(user_id)
+    )
+
+    if not trigger:
         return
 
-    # 🔁 SAY
+    active_users[user_id] = True
+
+    if "bye" in content:
+        active_users[user_id] = False
+
+    # SAY
     text, count = parse_say(content)
-    if text and count:
-        await message.channel.send("okok chill 😭 here u go")
+    if text:
+        await message.channel.send("ok chill 😭 here")
         await message.channel.send(" ".join([text]*count))
         return
 
-    # 🌡️ WEATHER
-    if "temp" in content or "temperature" in content or "weather" in content:
-        w = await get_weather()
-        if w:
-            await message.channel.send(w)
-        else:
-            await message.channel.send("weather bugging rn 😭")
+    # WEATHER
+    if "temp" in content or "weather" in content:
+        await message.channel.send(await get_weather())
         return
 
-    # 📅 DATE
-    if "date" in content or "today" in content:
+    # DATE
+    if "date" in content:
         await message.channel.send(get_today())
         return
 
-    # 💰 GOLD
+    # GOLD
     if "gold" in content:
         p = await get_price("XAU")
-        await message.channel.send(f"gold rn {p} 👀" if p else "error 😭")
+        await message.channel.send(f"gold rn {p}" if p else "error 😭")
         return
 
-    # 💰 SILVER
+    # SILVER
     if "silver" in content:
         p = await get_price("XAG")
-        await message.channel.send(f"silver rn {p} 👀" if p else "error 😭")
+        await message.channel.send(f"silver rn {p}" if p else "error 😭")
         return
 
-    # 📈 STOCK
+    # STOCK
     for key in STOCKS:
         if key in content:
             res = await get_stock(STOCKS[key])
             await message.channel.send(res if res else "market weird rn 💀")
             return
 
-    # 🍳 RECIPE
+    # RECIPE
     if "how to" in content or "make" in content:
         r = get_recipe(content)
         if r:
