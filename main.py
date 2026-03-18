@@ -24,13 +24,14 @@ bot = commands.Bot(command_prefix="", intents=intents)
 if cookies_data:
     with open("cookies.txt", "w") as f:
         f.write(cookies_data)
-        
+
 ytdl = yt_dlp.YoutubeDL({
     'format': 'bestaudio/best',
     'quiet': True,
     'noplaylist': True,
     'cookiefile': 'cookies.txt',
 })
+
 # ===== READY =====
 @bot.event
 async def on_ready():
@@ -69,83 +70,85 @@ async def on_message(message):
                 await message.channel.send(f"{message.author.mention} {action}s someone 💖\n{gif}")
             return
 
-   # ===== MUSIC PLAY =====
-if content.startswith("/play"):
-    query = message.content.replace("/play", "").strip()
+    # ===== MUSIC PLAY =====
+    if content.startswith("/play"):
+        query = message.content.replace("/play", "").strip()
 
-    if not message.author.voice:
-        await message.channel.send("❌ Join VC first")
-        return
-
-    channel = message.author.voice.channel
-    vc = discord.utils.get(bot.voice_clients, guild=message.guild)
-
-    # 🔥 SAFE CONNECT (NO 4017 ERROR)
-    if not vc:
-        try:
-            vc = await channel.connect(timeout=30)
-        except Exception as e:
-            await message.channel.send(f"❌ Voice connection failed: {e}")
+        if not message.author.voice:
+            await message.channel.send("❌ Join VC first")
             return
-    else:
+
+        channel = message.author.voice.channel
+        vc = discord.utils.get(bot.voice_clients, guild=message.guild)
+
+        # SAFE CONNECT
+        if not vc:
+            try:
+                vc = await channel.connect(timeout=30)
+            except Exception as e:
+                await message.channel.send(f"❌ Voice connection failed: {e}")
+                return
+        else:
+            try:
+                await vc.move_to(channel)
+            except:
+                pass
+
+        await message.channel.send(f"🎶 Playing: {query}")
+
         try:
-            await vc.move_to(channel)
-        except:
-            pass
+            url = await get_audio_url(query)
+        except Exception as e:
+            await message.channel.send("❌ Error fetching song")
+            print(e)
+            return
 
-    await message.channel.send(f"🎶 Playing: {query}")
+        if vc.is_playing():
+            vc.stop()
 
-    # 🔥 GET AUDIO
-    try:
-        url = await get_audio_url(query)
-    except Exception as e:
-        await message.channel.send("❌ Error fetching song")
-        print(e)
+        source = discord.FFmpegPCMAudio(
+            url,
+            executable="/usr/bin/ffmpeg"
+        )
+
+        try:
+            vc.play(source)
+        except Exception as e:
+            await message.channel.send(f"❌ Play error: {e}")
+
         return
-
-    # 🔥 STOP OLD
-    if vc.is_playing():
-        vc.stop()
-
-    # 🔥 FIX FFMPEG PATH
-    source = discord.FFmpegPCMAudio(
-        url,
-        executable="/usr/bin/ffmpeg"  # ✅ IMPORTANT FIX
-    )
-
-    try:
-        vc.play(source)
-    except Exception as e:
-        await message.channel.send(f"❌ Play error: {e}")
 
     # ===== STOP =====
-    elif content.startswith("/stop"):
+    if content.startswith("/stop"):
         vc = discord.utils.get(bot.voice_clients, guild=message.guild)
         if vc:
             await vc.disconnect()
             await message.channel.send("⏹️ Stopped")
+        return
 
-    # ===== AI CHAT (GROQ) =====
-    else:
-        try:
-            headers = {
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json"
-            }
+    # ===== AI CHAT =====
+    try:
+        headers = {
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Content-Type": "application/json"
+        }
 
-            json_data = {
-                "model": "mixtral-8x7b-32768",
-                "messages": [{"role": "user", "content": message.content}]
-            }
+        json_data = {
+            "model": "mixtral-8x7b-32768",
+            "messages": [{"role": "user", "content": message.content}]
+        }
 
-            res = requests.post("https://api.groq.com/openai/v1/chat/completions",
-                                headers=headers, json=json_data)
+        res = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers=headers,
+            json=json_data
+        )
 
-            reply = res.json()["choices"][0]["message"]["content"]
-            await message.channel.send(reply)
+        reply = res.json()["choices"][0]["message"]["content"]
+        await message.channel.send(reply)
 
-        except:
-            pass
+    except:
+        pass
 
 # ===== RUN =====
 bot.run(TOKEN)
