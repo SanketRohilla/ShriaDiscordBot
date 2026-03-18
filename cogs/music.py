@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import wavelink
 
+
 class Music(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -25,24 +26,23 @@ class Music(commands.Cog):
             print(f"❌ Lavalink error: {e}")
 
     # =========================
-    # 🎵 PLAY (pl)
+    # 🎵 PLAY
     # =========================
     @commands.command(name="pl")
     async def play(self, ctx, *, search: str):
         if not ctx.author.voice:
             return await ctx.send("Join VC first 😭")
 
-        vc: wavelink.Player = (
-            ctx.voice_client or
-            await ctx.author.voice.channel.connect(cls=wavelink.Player)
-        )
+        vc: wavelink.Player = ctx.voice_client
 
+        if not vc:
+            vc = await ctx.author.voice.channel.connect(cls=wavelink.Player)
+
+        # 🔥 FIX: force yt search
         tracks = await wavelink.Playable.search(f"ytsearch:{search}")
 
-         print("TRACKS FOUND:", tracks)
-
         if not tracks:
-            return await ctx.send("No results 💀")
+            return await ctx.send("No results found 💀")
 
         track = tracks[0]
 
@@ -54,7 +54,7 @@ class Music(commands.Cog):
             await ctx.send(f"🎶 Playing **{track.title}**")
 
     # =========================
-    # ⏭️ SKIP (sk)
+    # ⏭️ SKIP
     # =========================
     @commands.command(name="sk")
     async def skip(self, ctx):
@@ -67,7 +67,7 @@ class Music(commands.Cog):
             await ctx.send("Nothing playing ❌")
 
     # =========================
-    # ⏸️ PAUSE (ps)
+    # ⏸️ PAUSE
     # =========================
     @commands.command(name="ps")
     async def pause(self, ctx):
@@ -80,7 +80,7 @@ class Music(commands.Cog):
             await ctx.send("Nothing playing ❌")
 
     # =========================
-    # ▶️ RESUME (rs)
+    # ▶️ RESUME
     # =========================
     @commands.command(name="rs")
     async def resume(self, ctx):
@@ -93,7 +93,7 @@ class Music(commands.Cog):
             await ctx.send("Nothing paused ❌")
 
     # =========================
-    # 🛑 STOP (st)
+    # 🛑 STOP
     # =========================
     @commands.command(name="st")
     async def stop(self, ctx):
@@ -106,7 +106,7 @@ class Music(commands.Cog):
             await ctx.send("Not in VC ❌")
 
     # =========================
-    # 📜 QUEUE (q)
+    # 📜 QUEUE
     # =========================
     @commands.command(name="q")
     async def queue(self, ctx):
@@ -121,7 +121,7 @@ class Music(commands.Cog):
         await ctx.send(f"🎶 Queue:\n{desc}")
 
     # =========================
-    # 🔊 VOLUME (vol)
+    # 🔊 VOLUME
     # =========================
     @commands.command(name="vol")
     async def volume(self, ctx, vol: int):
@@ -134,6 +134,7 @@ class Music(commands.Cog):
         await vc.set_volume(vol)
 
         await ctx.send(f"🔊 Volume: {vol}%")
+
 
 async def setup(bot):
     await bot.add_cog(Music(bot))
