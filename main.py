@@ -31,15 +31,39 @@ LOVE_LINES = [
 # 🔥 ROASTS
 # =========================
 ROASTS = [
-    "bro came back just to embarrass himself 💀",
-    "you thought that reply was smart? 😭",
-    "your brain on airplane mode again 😂",
-    "npc response fr 💀",
-    "you really said that out loud huh 😏",
+    "bro your brain on airplane mode 💀",
+    "you lag in real life 😂",
+    "even google gave up on you 😭",
+    "npc behavior fr 💀",
+    "your iq buffering rn 💀",
+    "you got 2 braincells fighting 😏",
+    "bro thought he did something 💀",
 ]
 
-# store tagged users
+# =========================
+# 😒 JEALOUS LINES
+# =========================
+JEALOUS_LINES = [
+    "oh… so now it's about her? 😒",
+    "wow… you replaced me that fast? 💀",
+    "go talk to her then 🙄",
+    "hmm interesting… i see how it is 😏",
+    "i’m watching you 👀"
+]
+
+GIRL_NAMES = ["shreya","riya","priya","sneha","anu","kavya","girl","she","her"]
+
 tagged_users = {}
+
+# =========================
+# 📢 FIND MEMBER
+# =========================
+def find_member(guild, name):
+    name = name.lower()
+    for member in guild.members:
+        if name in member.name.lower() or name in member.display_name.lower():
+            return member
+    return None
 
 # =========================
 # 🍳 RECIPE
@@ -56,7 +80,7 @@ async def recipe_ai(food):
                 json={
                     "model": "llama-3.1-8b-instant",
                     "messages": [
-                        {"role": "system", "content": "give short recipe steps"},
+                        {"role": "system", "content": "Give short simple recipe steps (max 5 steps)."},
                         {"role": "user", "content": f"how to make {food}"}
                     ]
                 }
@@ -65,16 +89,16 @@ async def recipe_ai(food):
 
         return data["choices"][0]["message"]["content"][:200]
     except:
-        return "idk 😭"
+        return "idk just youtube it 😭"
 
 # =========================
 # 🎬 GIF
 # =========================
-ACTIONS = ["kiss","hug","slap","punch","kick"]
+ACTIONS = ["kiss","hug","slap","punch","kick","cry","blush","laugh"]
 
 async def get_gif(action):
     try:
-        url = f"https://api.giphy.com/v1/gifs/search?api_key={GIPHY_API_KEY}&q=anime+{action}&limit=20"
+        url = f"https://api.giphy.com/v1/gifs/search?api_key={GIPHY_API_KEY}&q=anime+{action}&limit=30"
         async with aiohttp.ClientSession() as s:
             async with s.get(url) as r:
                 data = await r.json()
@@ -85,7 +109,7 @@ async def get_gif(action):
         return None
 
 # =========================
-# 💬 AI
+# 💬 AI CHAT
 # =========================
 async def ai_reply(msg):
     try:
@@ -99,8 +123,11 @@ async def ai_reply(msg):
                 json={
                     "model": "llama-3.1-8b-instant",
                     "messages": [
-                        {"role": "system","content":"short human-like flirty replies"},
-                        {"role": "user","content": msg}
+                        {
+                            "role": "system",
+                            "content": "You are Sky, flirty, playful, short replies."
+                        },
+                        {"role": "user", "content": msg}
                     ]
                 }
             ) as r:
@@ -122,7 +149,7 @@ async def on_message(message):
     lower = msg.lower()
 
     # =====================
-    # 🔥 REPLY ROAST SYSTEM
+    # 🔥 AUTO ROAST REPLY
     # =====================
     if message.author.id in tagged_users:
         await message.channel.send(
@@ -132,7 +159,7 @@ async def on_message(message):
         return
 
     # =====================
-    # SKY TRIGGER
+    # TRIGGER
     # =====================
     is_reply = False
     if message.reference:
@@ -157,23 +184,61 @@ async def on_message(message):
         lower = msg.lower()
 
     # =====================
-    # 💖 LOVE TAG
+    # 😒 JEALOUSY
     # =====================
-    if message.mentions:
-        user = message.mentions[0]
+    if any(word in lower for word in GIRL_NAMES):
+        await message.channel.send(random.choice(JEALOUS_LINES))
+        return
 
-        tagged_users[user.id] = True
+    # =====================
+    # 💖 TAG SYSTEM
+    # =====================
+    if "tag" in lower:
+        parts = lower.split()
 
-        await message.channel.send(
-            f"{user.mention} {random.choice(LOVE_LINES)}"
-        )
+        if "me" in parts:
+            user = message.author
+        else:
+            try:
+                name = parts[parts.index("tag") + 1]
+                user = find_member(message.guild, name)
+            except:
+                user = None
+
+        if user:
+            tagged_users[user.id] = True
+            await message.channel.send(
+                f"{user.mention} {random.choice(LOVE_LINES)}"
+            )
+        else:
+            await message.channel.send("who even is that 😭")
+
+        return
+
+    # =====================
+    # 🔥 ROAST
+    # =====================
+    if "roast" in lower:
+        if "everyone" in lower:
+            await message.channel.send(
+                f"@everyone {random.choice(ROASTS)}",
+                allowed_mentions=discord.AllowedMentions(everyone=True)
+            )
+            return
+
+        if message.mentions:
+            user = message.mentions[0]
+            await message.channel.send(f"{user.mention} {random.choice(ROASTS)}")
+            return
+
+        await message.channel.send(random.choice(ROASTS))
         return
 
     # =====================
     # 🍳 RECIPE
     # =====================
-    if "how to make" in lower:
-        food = lower.replace("how to make", "").strip()
+    if "how to make" in lower or "recipe" in lower:
+        food = lower.replace("how to make", "").replace("recipe", "").strip()
         await message.channel.send(await recipe_ai(food))
         return
 
@@ -188,7 +253,7 @@ async def on_message(message):
             return
 
     # =====================
-    # 💬 AI CHAT
+    # 💬 CHAT
     # =====================
     reply = await ai_reply(msg)
     await message.channel.send(reply)
