@@ -83,19 +83,42 @@ async def get_gif(action):
         return None
 
 # =========================
-# 😏 RANDOM HUMAN RESPONSES
+# 😏 STYLE ENGINE
 # =========================
-RANDOM_REPLIES = [
-    "idk 😭",
-    "bruhh",
-    "nah",
-    "maybe 👀",
-    "ehh",
-    "what",
-    "huh?",
-    "lowkey idk",
-    "you weird 💀"
-]
+EMOJIS = ["😭", "💀", "👀", "✨", "😏", "🙂", "😒"]
+
+def humanize(text):
+    text = text.strip()
+
+    # cut long
+    words = text.split()
+    if len(words) > 10:
+        text = " ".join(words[:10])
+
+    # emoji always (fix your issue)
+    text += " " + random.choice(EMOJIS)
+
+    # sometimes very short
+    if random.random() < 0.25:
+        return random.choice([
+            "bruhh 💀",
+            "idk 😭",
+            "nahh 👀",
+            "huh?",
+            "what 😭"
+        ])
+
+    # sometimes medium messy
+    if random.random() < 0.4:
+        return random.choice([
+            "idk tbh 😭",
+            "lowkey weird 👀",
+            "why u asking that 😏",
+            "nahhh not really 💀",
+            "maybe… idk ✨"
+        ])
+
+    return text
 
 # =========================
 # 😏 JEALOUSY
@@ -115,7 +138,7 @@ async def get_reply(user_id, user_message):
             "jealousy": 0
         })
 
-        # jealousy logic
+        # jealousy
         if any(word in user_message.lower() for word in GIRL_WORDS):
             user_data["jealousy"] += 1
         else:
@@ -126,27 +149,22 @@ async def get_reply(user_id, user_message):
 
         mood = user_data["mood"]
 
-        # =====================
-        # 🧠 STRICT PERSONALITY
-        # =====================
         system_prompt = (
             "You are Shria, a real discord girl.\n"
+            "- mix short and medium replies\n"
+            "- sometimes 1 word, sometimes 1 sentence\n"
+            "- don't always answer directly\n"
+            "- sometimes react or ask back\n"
+            "- no AI tone\n"
+            "- natural messy texting style\n"
             
-            "STRICT RULES:\n"
-            "- You DO NOT like coffee\n"
-            "- You prefer tea or green tea\n"
-            "- NEVER say you love coffee\n"
-            
-            "- VERY SHORT replies (1–5 words)\n"
-            "- Talk like normal person\n"
-            "- DO NOT act like AI\n"
-            "- Sometimes dodge questions\n"
-            "- Sometimes react instead\n"
-            "- Keep it messy and casual\n"
+            "IMPORTANT:\n"
+            "- you hate coffee\n"
+            "- you prefer tea or green tea\n"
         )
 
         if mood == "jealous":
-            system_prompt += "\n- Be slightly jealous and teasing"
+            system_prompt += "\n- act slightly jealous and teasing"
 
         messages = [{"role": "system", "content": system_prompt}]
         messages.append({"role": "user", "content": user_message})
@@ -161,30 +179,23 @@ async def get_reply(user_id, user_message):
                 json={
                     "model": "llama-3.1-8b-instant",
                     "messages": messages,
-                    "temperature": 1.5
+                    "temperature": 1.4
                 }
             ) as res:
                 data = await res.json()
 
         reply = data["choices"][0]["message"]["content"].strip().lower()
 
-        # =====================
-        # 🔥 HARD COFFEE FILTER
-        # =====================
+        # 🔥 HARD COFFEE FIX
         if "coffee" in reply:
             reply = random.choice([
-                "nahh i don't like it",
-                "tea better",
-                "green tea tbh",
-                "not really",
-                "coffee mid 😭"
+                "nahh i dont like it",
+                "tea better 😭",
+                "green tea tbh 👀",
+                "not really"
             ])
 
-        # randomness
-        if random.random() < 0.35:
-            reply = random.choice(RANDOM_REPLIES)
-
-        reply = reply.split("\n")[0][:60]
+        reply = humanize(reply)
 
         memory[str(user_id)] = user_data
         save_memory(memory)
@@ -192,7 +203,11 @@ async def get_reply(user_id, user_message):
         return reply
 
     except:
-        return random.choice(RANDOM_REPLIES)
+        return random.choice([
+            "idk 😭",
+            "bruhh 💀",
+            "nahh 👀"
+        ])
 
 # =========================
 # 🚀 READY
@@ -231,7 +246,7 @@ async def on_message(message):
 
     # AI
     await message.channel.typing()
-    await asyncio.sleep(random.uniform(0.2, 0.5))
+    await asyncio.sleep(random.uniform(0.3, 0.7))
 
     reply = await get_reply(message.author.id, message.content)
     await message.channel.send(reply)
