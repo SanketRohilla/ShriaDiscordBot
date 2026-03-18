@@ -5,7 +5,6 @@ import asyncio
 import os
 import json
 from datetime import datetime
-
 from discord.ext import commands
 
 TOKEN = os.getenv("TOKEN")
@@ -14,7 +13,6 @@ GIPHY_API_KEY = os.getenv("GIPHY_API_KEY")
 
 intents = discord.Intents.default()
 intents.message_content = True
-
 bot = commands.Bot(command_prefix="", intents=intents)
 
 # =========================
@@ -37,9 +35,6 @@ def save_memory(data):
 # =========================
 # 🎬 GIF
 # =========================
-gif_cache = {}
-ACTIONS = ["kiss","hug","slap","punch","kick","cry","blush","laugh"]
-
 async def get_gif(action):
     try:
         url = f"https://api.giphy.com/v1/gifs/search?api_key={GIPHY_API_KEY}&q=anime+{action}&limit=40"
@@ -51,6 +46,8 @@ async def get_gif(action):
     except:
         return None
 
+ACTIONS = ["kiss","hug","slap","punch","kick","cry","blush","laugh"]
+
 # =========================
 # 📅 DATE
 # =========================
@@ -59,7 +56,7 @@ def get_today():
     return f"{now.strftime('%A')}, {now.strftime('%d %B %Y')}"
 
 # =========================
-# 🌡️ WEATHER INDIA
+# 🌡️ WEATHER
 # =========================
 async def get_india_weather():
     try:
@@ -70,7 +67,6 @@ async def get_india_weather():
 
         temp = data["current_condition"][0]["temp_C"]
         desc = data["current_condition"][0]["weatherDesc"][0]["value"]
-
         return temp, desc
     except:
         return None, None
@@ -96,35 +92,48 @@ async def get_silver_price():
     except:
         return None
 
-# =========================
-# 💱 USD → INR
-# =========================
 async def usd_to_inr(usd):
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get("https://open.er-api.com/v6/latest/USD") as res:
                 data = await res.json()
-
         rate = data["rates"]["INR"]
         return round(usd * rate, 2)
     except:
         return None
 
 # =========================
-# 😏 SMART REPLIES
+# 📈 STOCKS
+# =========================
+STOCKS = {
+    "reliance": "RELIANCE.NS",
+    "tcs": "TCS.NS",
+    "tata": "TCS.NS",
+    "infosys": "INFY.NS",
+    "infy": "INFY.NS",
+    "hdfc": "HDFCBANK.NS"
+}
+
+async def get_stock_price(symbol):
+    try:
+        url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbol}"
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as res:
+                data = await res.json()
+
+        result = data["quoteResponse"]["result"][0]
+        return result["shortName"], result["regularMarketPrice"]
+
+    except:
+        return None, None
+
+# =========================
+# 😏 SMART REPLY
 # =========================
 def smart_reply(msg):
-    msg = msg.lower()
-
-    if "short" in msg:
-        return random.choice([
-            "so what 😭 still better than you",
-            "short but elite 💀"
-        ])
-
     if "coffee" in msg:
         return "nahh tea better 😭"
-
     return None
 
 # =========================
@@ -134,24 +143,14 @@ async def get_ai_reply(user_id, user_message):
     try:
         memory = load_memory()
         user_data = memory.get(str(user_id), {"history": []})
-        history = user_data["history"][-4:]
 
         system_prompt = (
             "You are Shria, a real discord girl.\n"
             "- short reply\n"
             "- casual + funny\n"
-            "- Gen Z words sometimes\n"
-            "- emoji included\n"
-            "- no roleplay words\n"
-            "- keep convo going\n"
+            "- Gen Z vibe\n"
+            "- include emoji\n"
         )
-
-        messages = [{"role": "system", "content": system_prompt}]
-
-        for msg in history:
-            messages.append(msg)
-
-        messages.append({"role": "user", "content": user_message})
 
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -162,27 +161,19 @@ async def get_ai_reply(user_id, user_message):
                 },
                 json={
                     "model": "llama-3.1-8b-instant",
-                    "messages": messages,
-                    "temperature": 1.2,
-                    "max_tokens": 60
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_message}
+                    ],
+                    "temperature": 1.2
                 }
             ) as res:
                 data = await res.json()
 
-        reply = data["choices"][0]["message"]["content"].strip()
-        reply = reply.split("\n")[0]
+        reply = data["choices"][0]["message"]["content"].split("\n")[0][:80]
 
-        if len(reply.split()) > 12:
-            reply = " ".join(reply.split()[:12])
-
-        if not any(e in reply for e in ["😭","💀","👀","✨","😏"]):
+        if not any(e in reply for e in ["😭","💀","👀"]):
             reply += " 😭"
-
-        user_data["history"].append({"role": "user", "content": user_message})
-        user_data["history"].append({"role": "assistant", "content": reply})
-
-        memory[str(user_id)] = user_data
-        save_memory(memory)
 
         return reply
 
@@ -227,13 +218,23 @@ async def on_message(message):
         await message.channel.send(f"silver rn ${usd} (~₹{inr}) 👀")
         return
 
-    # STOCK
+    # STOCK PRICE
+    for key in STOCKS:
+        if key in content:
+            name, price = await get_stock_price(STOCKS[key])
+            if price:
+                await message.channel.send(f"{name} rn ₹{price} 👀")
+            else:
+                await message.channel.send("idk rn 😭")
+            return
+
+    # STOCK ADVICE
     if "stock" in content:
         await message.channel.send(
             random.choice([
-                "tata, reliance, hdfc are safe 👀",
-                "infosys lowkey good long term 💀",
-                "depends on risk tbh 😭"
+                "reliance kinda strong long term 👀",
+                "tcs and infosys safe plays fr 💀",
+                "hdfc also solid 😏"
             ])
         )
         return
@@ -252,7 +253,7 @@ async def on_message(message):
         await message.channel.send(smart)
         return
 
-    # AI
+    # AI CHAT
     reply = await get_ai_reply(message.author.id, message.content)
     await message.channel.send(reply)
 
