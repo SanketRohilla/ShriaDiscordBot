@@ -7,17 +7,23 @@ import json
 
 from discord.ext import commands
 
+# =========================
+# 🔐 ENV
+# =========================
 TOKEN = os.getenv("TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GIPHY_API_KEY = os.getenv("GIPHY_API_KEY")
 
+# =========================
+# ⚙️ BOT
+# =========================
 intents = discord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="", intents=intents)
 
 # =========================
-# 💾 MEMORY SYSTEM
+# 💾 MEMORY
 # =========================
 MEMORY_FILE = "memory.json"
 
@@ -34,105 +40,155 @@ def save_memory(data):
         json.dump(data, f, indent=2)
 
 # =========================
-# 🎬 GIF
+# 🎬 GIF SYSTEM
 # =========================
+gif_cache = {}
+
+ACTIONS = [
+    "kiss","hug","slap","punch","kick",
+    "cry","blush","laugh","pat","cuddle"
+]
+
 async def get_gif(action):
     try:
-        url = f"https://api.giphy.com/v1/gifs/search?api_key={GIPHY_API_KEY}&q=anime+{action}&limit=25"
+        url = f"https://api.giphy.com/v1/gifs/search?api_key={GIPHY_API_KEY}&q=anime+{action}&limit=40"
 
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as res:
                 data = await res.json()
 
         gifs = [g["images"]["original"]["url"] for g in data["data"]]
-        return random.choice(gifs) if gifs else None
+
+        if not gifs:
+            return None
+
+        if action not in gif_cache:
+            gif_cache[action] = []
+
+        available = list(set(gifs) - set(gif_cache[action]))
+
+        if not available:
+            gif_cache[action] = []
+            available = gifs
+
+        gif = random.choice(available)
+        gif_cache[action].append(gif)
+
+        return gif
+
     except:
         return None
 
 # =========================
-# 😏 SMART REPLIES
+# 😏 SMART HUMAN REPLIES
 # =========================
 def smart_reply(msg):
     msg = msg.lower()
 
-    if "good" in msg or "nice" in msg:
+    if "5 feet" in msg or "short" in msg:
         return random.choice([
-            "oh nice, what happened?",
-            "good how? tell me 👀",
-            "hmm sounds interesting"
+            "so what 😭 still better than you",
+            "short but elite 💀",
+            "why u so focused on my height 👀"
         ])
 
-    if "arrest" in msg or "jail" in msg:
+    if "dumb" in msg:
         return random.choice([
-            "wait what did I do 😭",
-            "nahhh I’m innocent fr",
-            "you setting me up 💀"
+            "wow rude 😭",
+            "nah you just mad 💀",
+            "look who's talking"
         ])
 
-    if "baby" in msg:
+    if "coffee" in msg:
         return random.choice([
-            "huh? who u calling that 😭",
-            "careful with that word 😏",
-            "you getting bold now huh"
+            "nahh tea better 😭",
+            "green tea > coffee 👀",
+            "coffee mid fr 💀"
+        ])
+
+    if "what" in msg:
+        return random.choice([
+            "nothing 😭",
+            "idk you tell me",
+            "bruhh chill 💀"
         ])
 
     return None
 
 # =========================
-# 💬 AI WITH MEMORY
+# 💬 AI REPLY (BALANCED)
 # =========================
 async def get_ai_reply(user_id, user_message):
-    memory = load_memory()
+    try:
+        memory = load_memory()
+        user_data = memory.get(str(user_id), {"history": []})
+        history = user_data["history"][-4:]
 
-    user_data = memory.get(str(user_id), {
-        "history": []
-    })
+        system_prompt = (
+            "You are Shria, a real discord girl.\n"
+            
+            "RULES:\n"
+            "- 1 short sentence (max 10–12 words)\n"
+            "- casual chat style\n"
+            "- slightly funny or playful\n"
+            "- sometimes Gen Z words (bruhh, idk, fr, lowkey)\n"
+            "- natural emojis (😭 💀 👀 ✨ 😏)\n"
+            "- keep convo going sometimes\n"
+            "- NO roleplay words (no giggles, smiles)\n"
+            
+            "IMPORTANT:\n"
+            "- you prefer tea, not coffee\n"
+        )
 
-    history = user_data["history"][-6:]
+        messages = [{"role": "system", "content": system_prompt}]
 
-    system_prompt = (
-        "You are Shria, a friendly, funny, slightly flirty girl.\n"
-        "- Talk like a real human\n"
-        "- Keep conversation flowing\n"
-        "- Ask questions sometimes\n"
-        "- React naturally\n"
-        "- Be playful and fun\n"
-        "- Do NOT act like AI\n"
-        "- You prefer tea, not coffee\n"
-    )
+        for msg in history:
+            messages.append(msg)
 
-    messages = [{"role": "system", "content": system_prompt}]
+        messages.append({"role": "user", "content": user_message})
 
-    for msg in history:
-        messages.append(msg)
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "llama-3.1-8b-instant",
+                    "messages": messages,
+                    "temperature": 1.2,
+                    "max_tokens": 60
+                }
+            ) as res:
+                data = await res.json()
 
-    messages.append({"role": "user", "content": user_message})
+        reply = data["choices"][0]["message"]["content"].strip()
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "llama-3.1-8b-instant",
-                "messages": messages,
-                "temperature": 1.2
-            }
-        ) as res:
-            data = await res.json()
+        # cut length
+        reply = reply.split("\n")[0]
+        if len(reply.split()) > 12:
+            reply = " ".join(reply.split()[:12])
 
-    reply = data["choices"][0]["message"]["content"]
+        # force emoji if missing
+        if not any(e in reply for e in ["😭","💀","👀","✨","😏"]):
+            reply += " " + random.choice(["😭","💀","👀","✨","😏"])
 
-    # SAVE MEMORY
-    user_data["history"].append({"role": "user", "content": user_message})
-    user_data["history"].append({"role": "assistant", "content": reply})
+        # save memory
+        user_data["history"].append({"role": "user", "content": user_message})
+        user_data["history"].append({"role": "assistant", "content": reply})
 
-    memory[str(user_id)] = user_data
-    save_memory(memory)
+        memory[str(user_id)] = user_data
+        save_memory(memory)
 
-    return reply.split("\n")[0][:120]
+        return reply
+
+    except:
+        return random.choice([
+            "idk 😭",
+            "bruhh 💀",
+            "nahh 👀"
+        ])
 
 # =========================
 # 🚀 READY
@@ -160,11 +216,14 @@ async def on_message(message):
         return
 
     # GIF
-    if "hug" in content or "kiss" in content:
-        gif = await get_gif("hug")
-        if gif:
-            await message.channel.send(gif)
-        return
+    for action in ACTIONS:
+        if action in content:
+            gif = await get_gif(action)
+            embed = discord.Embed(description=f"{message.author.mention} {action}ed someone 💖")
+            if gif:
+                embed.set_image(url=gif)
+            await message.channel.send(embed=embed)
+            return
 
     # SMART REPLY FIRST
     smart = smart_reply(content)
@@ -174,9 +233,12 @@ async def on_message(message):
 
     # AI
     await message.channel.typing()
-    await asyncio.sleep(random.uniform(0.5, 1.0))
+    await asyncio.sleep(random.uniform(0.4, 0.8))
 
     reply = await get_ai_reply(message.author.id, message.content)
     await message.channel.send(reply)
 
+# =========================
+# ▶️ RUN
+# =========================
 bot.run(TOKEN)
