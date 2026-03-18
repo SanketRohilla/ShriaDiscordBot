@@ -16,28 +16,13 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="", intents=intents)
 
 # =========================
-# 💾 MEMORY
-# =========================
-MEMORY_FILE = "memory.json"
-
-if not os.path.exists(MEMORY_FILE):
-    with open(MEMORY_FILE, "w") as f:
-        json.dump({}, f)
-
-def load_memory():
-    with open(MEMORY_FILE, "r") as f:
-        return json.load(f)
-
-def save_memory(data):
-    with open(MEMORY_FILE, "w") as f:
-        json.dump(data, f, indent=2)
-
-# =========================
 # 🎬 GIF
 # =========================
+ACTIONS = ["kiss","hug","slap","punch","kick","cry","blush","laugh"]
+
 async def get_gif(action):
     try:
-        url = f"https://api.giphy.com/v1/gifs/search?api_key={GIPHY_API_KEY}&q=anime+{action}&limit=40"
+        url = f"https://api.giphy.com/v1/gifs/search?api_key={GIPHY_API_KEY}&q=anime+{action}&limit=30"
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as res:
                 data = await res.json()
@@ -45,8 +30,6 @@ async def get_gif(action):
         return random.choice(gifs) if gifs else None
     except:
         return None
-
-ACTIONS = ["kiss","hug","slap","punch","kick","cry","blush","laugh"]
 
 # =========================
 # 📅 DATE
@@ -60,14 +43,11 @@ def get_today():
 # =========================
 async def get_india_weather():
     try:
-        url = "https://wttr.in/Delhi?format=j1"
+        url = "https://goweather.herokuapp.com/weather/Delhi"
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as res:
                 data = await res.json()
-
-        temp = data["current_condition"][0]["temp_C"]
-        desc = data["current_condition"][0]["weatherDesc"][0]["value"]
-        return temp, desc
+        return data.get("temperature"), data.get("description")
     except:
         return None, None
 
@@ -97,8 +77,7 @@ async def usd_to_inr(usd):
         async with aiohttp.ClientSession() as session:
             async with session.get("https://open.er-api.com/v6/latest/USD") as res:
                 data = await res.json()
-        rate = data["rates"]["INR"]
-        return round(usd * rate, 2)
+        return round(usd * data["rates"]["INR"], 2)
     except:
         return None
 
@@ -117,41 +96,60 @@ STOCKS = {
 async def get_stock_price(symbol):
     try:
         url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbol}"
-
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as res:
                 data = await res.json()
 
-        result = data["quoteResponse"]["result"][0]
-        return result["shortName"], result["regularMarketPrice"]
+        result = data.get("quoteResponse", {}).get("result", [])
+        if not result:
+            return None, None
 
+        return result[0]["shortName"], result[0]["regularMarketPrice"]
     except:
         return None, None
 
 # =========================
-# 😏 SMART REPLY
+# 🍳 RECIPE
 # =========================
-def smart_reply(msg):
+def is_serious_question(msg):
+    return any(k in msg for k in ["how to","recipe","make","cook","steps"])
+
+def get_simple_recipe(msg):
+    if "cake" in msg:
+        return "cake:\n1. mix flour, sugar, eggs\n2. add milk + butter\n3. bake 180°C 30min 🍰"
+    if "tea" in msg:
+        return "tea:\n1. boil water\n2. add tea + milk\n3. sugar ☕"
+    if "bread" in msg:
+        return "bread:\n1. flour + yeast\n2. knead\n3. bake 🍞"
     if "coffee" in msg:
-        return "nahh tea better 😭"
+        return "coffee:\n1. boil water\n2. add coffee\n3. milk ☕"
     return None
+
+# =========================
+# 🔁 SAY COMMAND
+# =========================
+def parse_say_command(msg):
+    try:
+        parts = msg.split()
+        if "say" not in parts:
+            return None, None
+
+        i = parts.index("say")
+        word = parts[i + 1]
+        count = int(parts[i + 2])
+
+        if count > 50:
+            count = 50
+
+        return word, count
+    except:
+        return None, None
 
 # =========================
 # 💬 AI
 # =========================
-async def get_ai_reply(user_id, user_message):
+async def get_ai_reply(user_message):
     try:
-        memory = load_memory()
-        user_data = memory.get(str(user_id), {"history": []})
-
-        system_prompt = (
-            "You are Shria, a real discord girl.\n"
-            "- short reply\n"
-            "- casual + funny\n"
-            "- Gen Z vibe\n"
-            "- include emoji\n"
-        )
-
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 "https://api.groq.com/openai/v1/chat/completions",
@@ -162,10 +160,9 @@ async def get_ai_reply(user_id, user_message):
                 json={
                     "model": "llama-3.1-8b-instant",
                     "messages": [
-                        {"role": "system", "content": system_prompt},
+                        {"role": "system", "content": "short funny genz replies"},
                         {"role": "user", "content": user_message}
-                    ],
-                    "temperature": 1.2
+                    ]
                 }
             ) as res:
                 data = await res.json()
@@ -193,6 +190,15 @@ async def on_message(message):
     if "shria" not in content and bot.user not in message.mentions:
         return
 
+    # SAY
+    if "say" in content:
+        word, count = parse_say_command(content)
+        if word and count:
+            await message.channel.send("uhh bro ok got u 😭")
+            repeated = " ".join([word] * count)
+            await message.channel.send(repeated)
+            return
+
     # DATE
     if "date" in content or "today" in content:
         await message.channel.send(f"today is {get_today()} 👀")
@@ -201,7 +207,7 @@ async def on_message(message):
     # WEATHER
     if "weather" in content or "temperature" in content:
         temp, desc = await get_india_weather()
-        await message.channel.send(f"india rn {temp}°C, {desc} 👀")
+        await message.channel.send(f"india rn {temp}, {desc} 👀")
         return
 
     # GOLD
@@ -218,26 +224,22 @@ async def on_message(message):
         await message.channel.send(f"silver rn ${usd} (~₹{inr}) 👀")
         return
 
-    # STOCK PRICE
+    # STOCK
     for key in STOCKS:
         if key in content:
             name, price = await get_stock_price(STOCKS[key])
             if price:
                 await message.channel.send(f"{name} rn ₹{price} 👀")
             else:
-                await message.channel.send("idk rn 😭")
+                await message.channel.send("market closed rn 💀")
             return
 
-    # STOCK ADVICE
-    if "stock" in content:
-        await message.channel.send(
-            random.choice([
-                "reliance kinda strong long term 👀",
-                "tcs and infosys safe plays fr 💀",
-                "hdfc also solid 😏"
-            ])
-        )
-        return
+    # RECIPE
+    if is_serious_question(content):
+        recipe = get_simple_recipe(content)
+        if recipe:
+            await message.channel.send(recipe)
+            return
 
     # GIF
     for action in ACTIONS:
@@ -247,14 +249,8 @@ async def on_message(message):
                 await message.channel.send(gif)
             return
 
-    # SMART
-    smart = smart_reply(content)
-    if smart:
-        await message.channel.send(smart)
-        return
-
-    # AI CHAT
-    reply = await get_ai_reply(message.author.id, message.content)
+    # AI
+    reply = await get_ai_reply(message.content)
     await message.channel.send(reply)
 
 bot.run(TOKEN)
