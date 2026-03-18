@@ -1,151 +1,131 @@
 import discord
-import requests
-import asyncio
 import random
-import os
+import requests
 import yt_dlp
-from discord import FFmpegPCMAudio
+import asyncio
+import os
 
-# =========================
-# 🔐 ENV VARIABLES
-# =========================
+from discord.ext import commands
+
+# ===== CONFIG =====
 TOKEN = os.getenv("TOKEN")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GIPHY_API_KEY = os.getenv("GIPHY_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-# =========================
-# ⚙️ DISCORD SETUP
-# =========================
+# ===== BOT SETUP =====
 intents = discord.Intents.default()
 intents.message_content = True
 intents.voice_states = True
 
-bot = commands.Bot(command_prefix="/", intents=intents)
+bot = commands.Bot(command_prefix="", intents=intents)
 
-# =========================
-# 🎌 ACTIONS
-# =========================
-ACTIONS = ["kiss", "hug", "slap", "punch", "kick", "cry", "blush", "laugh"]
+# ===== YTDL SETUP =====
+ytdl = yt_dlp.YoutubeDL({
+    'format': 'bestaudio/best',
+    'quiet': True,
+    'noplaylist': True,
+})
 
-# =========================
-# 🎬 GIF FETCH
-# =========================
-def get_gif(action):
-    try:
-        url = f"https://api.giphy.com/v1/gifs/search?api_key={GIPHY_API_KEY}&q=anime+{action}&limit=25"
-        data = requests.get(url).json()
-        gifs = [g["images"]["original"]["url"] for g in data["data"]]
-        return random.choice(gifs) if gifs else None
-    except:
-        return None
-
-# =========================
-# 💬 AI REPLY
-# =========================
-def get_reply(msg):
-    try:
-        res = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "llama-3.1-8b-instant",
-                "messages": [
-                    {"role": "system", "content": "You are Shria, cute, flirty, playful."},
-                    {"role": "user", "content": msg},
-                ],
-            },
-        )
-        return res.json()["choices"][0]["message"]["content"]
-    except:
-        return "ugh brain lag 😭"
-
-# =========================
-# 🎵 MUSIC (NO LAVALINK)
-# =========================
-ytdl = yt_dlp.YoutubeDL({"format": "bestaudio", "quiet": True})
-
-async def play_music(message, query):
-    if not message.author.voice:
-        await message.channel.send("Join VC first 😭")
-        return
-
-    channel = message.author.voice.channel
-    vc = message.guild.voice_client
-
-    if not vc:
-        vc = await channel.connect(reconnect=True, timeout=60)
-
-    if not query.startswith("http"):
-        query = f"ytsearch:{query}"
-
-    info = ytdl.extract_info(query, download=False)
-
-    if "entries" in info:
-        info = info["entries"][0]
-
-    url = info["url"]
-    title = info["title"]
-
-    vc.stop()
-    vc.play(FFmpegPCMAudio(url))
-
-    await message.channel.send(f"🎶 Playing: {title}")
-
-# =========================
-# 💬 EVENTS
-# =========================
-@client.event
+# ===== READY =====
+@bot.event
 async def on_ready():
-    print(f"💖 Logged in as {client.user}")
+    print(f"💖 Logged in as {bot.user}")
 
-@client.event
+# ===== GIF FUNCTION =====
+def get_gif(action):
+    url = f"https://api.giphy.com/v1/gifs/search?api_key={GIPHY_API_KEY}&q=anime {action}&limit=25"
+    data = requests.get(url).json()
+    gifs = [g['images']['original']['url'] for g in data['data']]
+    return random.choice(gifs) if gifs else None
+
+# ===== AUDIO FETCH =====
+async def get_audio_url(query):
+    loop = asyncio.get_event_loop()
+    data = await loop.run_in_executor(
+        None,
+        lambda: ytdl.extract_info(f"ytsearch:{query}", download=False)
+    )
+    return data['entries'][0]['url']
+
+# ===== MAIN MESSAGE HANDLER =====
+@bot.event
 async def on_message(message):
-    if message.author == client.user:
+    if message.author.bot:
         return
 
     content = message.content.lower()
 
-    # 🎵 MUSIC COMMANDS
-    if content.startswith("/play"):
-        query = message.content[5:].strip()
-        await play_music(message, query)
-        return
-
-    if content.startswith("/stop"):
-        vc = message.guild.voice_client
-        if vc:
-            await vc.disconnect()
-            await message.channel.send("👋 Left VC")
-        return
-
-    # 🎬 ACTIONS
-    if "shria" not in content and client.user not in message.mentions:
-        return
-
-    for action in ACTIONS:
+    # ===== GIF COMMANDS =====
+    actions = ["slap", "kiss", "hug", "kick", "cry", "blush", "laugh"]
+    for action in actions:
         if action in content:
             gif = get_gif(action)
-
-            text = f"{message.author.mention} {action}ed someone 😭"
-            embed = discord.Embed(description=text)
-
             if gif:
-                embed.set_image(url=gif)
-
-            await message.channel.send(embed=embed)
+                await message.channel.send(f"{message.author.mention} {action}s someone 💖\n{gif}")
             return
 
-    # 💬 AI CHAT
-    await message.channel.typing()
-    await asyncio.sleep(1)
+    # ===== MUSIC PLAY =====
+    if content.startswith("/play"):
+        query = message.content.replace("/play", "").strip()
 
-    reply = get_reply(message.content)
-    await message.channel.send(reply)
+        if not message.author.voice:
+            await message.channel.send("❌ Join VC first")
+            return
 
-# =========================
-# 🚀 RUN
-# =========================
-client.run(TOKEN)
+        channel = message.author.voice.channel
+        vc = discord.utils.get(bot.voice_clients, guild=message.guild)
+
+        if not vc:
+            vc = await channel.connect(reconnect=True)
+        else:
+            await vc.move_to(channel)
+
+        await message.channel.send(f"🎶 Playing: {query}")
+
+        try:
+            url = await get_audio_url(query)
+        except:
+            await message.channel.send("❌ Error fetching song")
+            return
+
+        if vc.is_playing():
+            vc.stop()
+
+        source = discord.FFmpegPCMAudio(
+            url,
+            executable="/usr/bin/ffmpeg"
+        )
+
+        vc.play(source)
+
+    # ===== STOP =====
+    elif content.startswith("/stop"):
+        vc = discord.utils.get(bot.voice_clients, guild=message.guild)
+        if vc:
+            await vc.disconnect()
+            await message.channel.send("⏹️ Stopped")
+
+    # ===== AI CHAT (GROQ) =====
+    else:
+        try:
+            headers = {
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json"
+            }
+
+            json_data = {
+                "model": "mixtral-8x7b-32768",
+                "messages": [{"role": "user", "content": message.content}]
+            }
+
+            res = requests.post("https://api.groq.com/openai/v1/chat/completions",
+                                headers=headers, json=json_data)
+
+            reply = res.json()["choices"][0]["message"]["content"]
+            await message.channel.send(reply)
+
+        except:
+            pass
+
+# ===== RUN =====
+bot.run(TOKEN)
