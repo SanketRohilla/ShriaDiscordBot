@@ -16,23 +16,33 @@ intents.members = True
 bot = commands.Bot(command_prefix="", intents=intents)
 
 # =========================
-# 🔥 ROASTS
+# 💖 LOVE LINES
 # =========================
-ROASTS = [
-    "bro your brain on airplane mode 💀",
-    "you type like lag is permanent 😂",
-    "even google gave up on you 😭",
-    "you built like a loading screen 💀",
-    "npc behavior fr 😂",
-    "your iq buffering rn 💀",
-    "you got 2 braincells fighting 😏",
-    "bro thought he did something 💀",
-    "you not dumb, just special edition 😂",
-    "you are the reason tutorials exist 😭"
+LOVE_LINES = [
+    "you looking kinda cute today 😏",
+    "why you always this fine huh 👀",
+    "stop being this attractive it's illegal 😭",
+    "lowkey got a crush on you ngl 💕",
+    "you just made the chat better by existing ✨",
+    "i see you… and i like what i see 😏",
 ]
 
 # =========================
-# 🍳 RECIPE (AI FOR FOOD ONLY)
+# 🔥 ROASTS
+# =========================
+ROASTS = [
+    "bro came back just to embarrass himself 💀",
+    "you thought that reply was smart? 😭",
+    "your brain on airplane mode again 😂",
+    "npc response fr 💀",
+    "you really said that out loud huh 😏",
+]
+
+# store tagged users
+tagged_users = {}
+
+# =========================
+# 🍳 RECIPE
 # =========================
 async def recipe_ai(food):
     try:
@@ -46,11 +56,7 @@ async def recipe_ai(food):
                 json={
                     "model": "llama-3.1-8b-instant",
                     "messages": [
-                        {
-                            "role": "system",
-                            "content":
-                            "Give short simple step-by-step recipe. max 5 steps."
-                        },
+                        {"role": "system", "content": "give short recipe steps"},
                         {"role": "user", "content": f"how to make {food}"}
                     ]
                 }
@@ -59,16 +65,16 @@ async def recipe_ai(food):
 
         return data["choices"][0]["message"]["content"][:200]
     except:
-        return "idk just youtube it 😭"
+        return "idk 😭"
 
 # =========================
 # 🎬 GIF
 # =========================
-ACTIONS = ["kiss","hug","slap","punch","kick","cry","blush","laugh"]
+ACTIONS = ["kiss","hug","slap","punch","kick"]
 
 async def get_gif(action):
     try:
-        url = f"https://api.giphy.com/v1/gifs/search?api_key={GIPHY_API_KEY}&q=anime+{action}&limit=30"
+        url = f"https://api.giphy.com/v1/gifs/search?api_key={GIPHY_API_KEY}&q=anime+{action}&limit=20"
         async with aiohttp.ClientSession() as s:
             async with s.get(url) as r:
                 data = await r.json()
@@ -79,7 +85,7 @@ async def get_gif(action):
         return None
 
 # =========================
-# 💬 AI NORMAL CHAT
+# 💬 AI
 # =========================
 async def ai_reply(msg):
     try:
@@ -93,12 +99,8 @@ async def ai_reply(msg):
                 json={
                     "model": "llama-3.1-8b-instant",
                     "messages": [
-                        {
-                            "role": "system",
-                            "content":
-                            "You are Sky, real human-like girl, short, fun, flirty, not long replies."
-                        },
-                        {"role": "user", "content": msg}
+                        {"role": "system","content":"short human-like flirty replies"},
+                        {"role": "user","content": msg}
                     ]
                 }
             ) as r:
@@ -118,6 +120,16 @@ async def on_message(message):
 
     msg = message.content.strip()
     lower = msg.lower()
+
+    # =====================
+    # 🔥 REPLY ROAST SYSTEM
+    # =====================
+    if message.author.id in tagged_users:
+        await message.channel.send(
+            f"{message.author.mention} {random.choice(ROASTS)}"
+        )
+        tagged_users.pop(message.author.id)
+        return
 
     # =====================
     # SKY TRIGGER
@@ -145,35 +157,24 @@ async def on_message(message):
         lower = msg.lower()
 
     # =====================
-    # 🔥 ROAST SYSTEM
+    # 💖 LOVE TAG
     # =====================
-    if "roast" in lower:
+    if message.mentions:
+        user = message.mentions[0]
 
-        # roast everyone
-        if "everyone" in lower:
-            await message.channel.send(
-                f"@everyone {random.choice(ROASTS)}",
-                allowed_mentions=discord.AllowedMentions(everyone=True)
-            )
-            return
+        tagged_users[user.id] = True
 
-        # roast mentioned user
-        if message.mentions:
-            target = message.mentions[0]
-            await message.channel.send(f"{target.mention} {random.choice(ROASTS)}")
-            return
-
-        # roast self
-        await message.channel.send(f"{message.author.mention} {random.choice(ROASTS)}")
+        await message.channel.send(
+            f"{user.mention} {random.choice(LOVE_LINES)}"
+        )
         return
 
     # =====================
-    # 🍳 RECIPE SYSTEM
+    # 🍳 RECIPE
     # =====================
-    if "how to make" in lower or "recipe" in lower:
-        food = lower.replace("how to make", "").replace("recipe", "").strip()
-        res = await recipe_ai(food)
-        await message.channel.send(res)
+    if "how to make" in lower:
+        food = lower.replace("how to make", "").strip()
+        await message.channel.send(await recipe_ai(food))
         return
 
     # =====================
@@ -187,7 +188,7 @@ async def on_message(message):
             return
 
     # =====================
-    # 💬 NORMAL CHAT
+    # 💬 AI CHAT
     # =====================
     reply = await ai_reply(msg)
     await message.channel.send(reply)
