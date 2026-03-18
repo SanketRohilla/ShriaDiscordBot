@@ -7,10 +7,16 @@ import json
 
 from discord.ext import commands
 
+# =========================
+# 🔐 ENV
+# =========================
 TOKEN = os.getenv("TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GIPHY_API_KEY = os.getenv("GIPHY_API_KEY")
 
+# =========================
+# ⚙️ BOT
+# =========================
 intents = discord.Intents.default()
 intents.message_content = True
 
@@ -34,11 +40,14 @@ def save_memory(data):
         json.dump(data, f, indent=2)
 
 # =========================
-# 🎬 GIF CACHE
+# 🎬 GIF SYSTEM
 # =========================
 gif_cache = {}
 
-ACTIONS = ["kiss","hug","slap","punch","kick","cry","blush","laugh"]
+ACTIONS = [
+    "kiss","hug","slap","punch","kick",
+    "cry","blush","laugh","pat","cuddle"
+]
 
 async def get_gif(action):
     try:
@@ -50,58 +59,69 @@ async def get_gif(action):
 
         gifs = [g["images"]["original"]["url"] for g in data["data"]]
 
-        return random.choice(gifs) if gifs else None
+        if not gifs:
+            return None
+
+        if action not in gif_cache:
+            gif_cache[action] = []
+
+        available = list(set(gifs) - set(gif_cache[action]))
+
+        if not available:
+            gif_cache[action] = []
+            available = gifs
+
+        gif = random.choice(available)
+        gif_cache[action].append(gif)
+
+        return gif
+
     except:
         return None
 
 # =========================
-# 😏 SMART COMEBACK SYSTEM
+# 😏 SMART HUMAN RESPONSES
 # =========================
-
 def smart_reply(msg):
     msg = msg.lower()
 
-    # HEIGHT / TEASING
     if "5 feet" in msg or "short" in msg:
         return random.choice([
-            "so what 😭",
-            "still cute tho 👀",
-            "short but elite 💀",
-            "height ain’t everything lol",
-            "why u pressed 😭"
+            "wow okay 😭 but I still carry myself better than you",
+            "so what? I like it that way",
+            "short but still winning 👀"
         ])
 
-    # INSULT
-    if "dumb" in msg or "stupid" in msg:
+    if "dumb" in msg:
         return random.choice([
-            "look who's talking 💀",
-            "you started it 😭",
-            "nah that’s you",
-            "bruhh relax",
+            "wow rude 😭",
+            "nah you just mad",
+            "look who’s talking"
         ])
 
-    # COFFEE
     if "coffee" in msg:
         return random.choice([
-            "nah tea better 😭",
-            "green tea tbh 👀",
-            "coffee mid 💀",
-            "not really"
+            "nahh not really, I prefer tea",
+            "green tea over coffee any day",
+            "coffee’s not really my thing"
         ])
 
     return None
 
 # =========================
-# 💬 AI
+# 💬 AI (NORMAL + FLIRTY)
 # =========================
 async def get_ai_reply(user_message):
     try:
         system_prompt = (
-            "You are Shria, a real discord girl.\n"
-            "- Talk casually like a normal person\n"
-            "- Mix short and medium replies\n"
-            "- Sometimes tease\n"
-            "- Keep it natural, not AI\n"
+            "You are Shria, a friendly, slightly flirty girl chatting naturally.\n"
+            "- Talk like a real human\n"
+            "- Keep replies normal length (1–2 sentences)\n"
+            "- Be playful and slightly teasing\n"
+            "- Keep conversation flowing\n"
+            "- Do NOT act like AI\n"
+            "- No cringe lines\n"
+            "- You do NOT like coffee, you prefer tea or green tea\n"
         )
 
         async with aiohttp.ClientSession() as session:
@@ -117,16 +137,20 @@ async def get_ai_reply(user_message):
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_message}
                     ],
-                    "temperature": 1.2
+                    "temperature": 1.1
                 }
             ) as res:
                 data = await res.json()
 
         reply = data["choices"][0]["message"]["content"]
-        return reply.split("\n")[0][:80]
+        return reply.split("\n")[0][:120]
 
     except:
-        return random.choice(["idk 😭", "bruhh 💀", "nahh"])
+        return random.choice([
+            "hmm I don’t know 😭",
+            "you’re confusing me",
+            "wait what 😭"
+        ])
 
 # =========================
 # 🚀 READY
@@ -157,24 +181,26 @@ async def on_message(message):
     for action in ACTIONS:
         if action in content:
             gif = await get_gif(action)
-            embed = discord.Embed(description=f"{message.author.mention} {action}ed someone 😭")
+            embed = discord.Embed(description=f"{message.author.mention} {action}ed someone 💖")
             if gif:
                 embed.set_image(url=gif)
             await message.channel.send(embed=embed)
             return
 
-    # 🔥 SMART REPLY FIRST
+    # SMART REPLY FIRST
     reply = smart_reply(content)
-
     if reply:
         await message.channel.send(reply)
         return
 
-    # AI fallback
+    # AI
     await message.channel.typing()
-    await asyncio.sleep(random.uniform(0.3, 0.7))
+    await asyncio.sleep(random.uniform(0.4, 0.8))
 
     reply = await get_ai_reply(message.content)
     await message.channel.send(reply)
 
+# =========================
+# ▶️ RUN
+# =========================
 bot.run(TOKEN)
